@@ -464,6 +464,52 @@ index 3d15ab1be..f00aa8a3f 100755
    -Doptimize=ReleaseFast \
    -Dstrip \
 
+diff --git a/llvm/lib/Target/Xtensa/XtensaSubtarget.cpp b/llvm/lib/Target/Xtensa/XtensaSubtarget.cpp
+--- a/llvm/lib/Target/Xtensa/XtensaSubtarget.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaSubtarget.cpp
+@@ -25,1 +25,1 @@ static cl::opt<bool> TextSectionLiterals("mtext-section-literals",
+-                                         cl::init(false), cl::Hidden);
++                                         cl::init(true), cl::Hidden);
+
+diff --git a/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp b/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
+index 9d3b9c703..02be63480 100644
+--- a/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
+@@ -1645,6 +1645,14 @@ SDValue XtensaTargetLowering::LowerImmediate(SDValue Op,
+   APInt APVal = CN->getAPIntValue();
+   int64_t Value = APVal.getSExtValue();
+   if (Op.getValueType() == MVT::i32) {
++    // Xtensa DAG isel can fail to select raw -32768 immediates after
++    // arithmetic reassociation. Materialize them through the constant pool
++    // instead of leaving them as plain DAG constants.
++    if (Value == -32768) {
++      Type *Ty = Type::getInt32Ty(*DAG.getContext());
++      Constant *CV = ConstantInt::get(Ty, Value);
++      return DAG.getConstantPool(CV, MVT::i32);
++    }
+     // Check if use node maybe lowered to the MOVI instruction
+     if (Value > -2048 && Value <= 2047)
+       return Op;
+
+diff --git a/llvm/lib/Target/Xtensa/XtensaRegisterInfo.h b/llvm/lib/Target/Xtensa/XtensaRegisterInfo.h
+index e2f3b51f7..eb5b0ba85 100644
+--- a/llvm/lib/Target/Xtensa/XtensaRegisterInfo.h
++++ b/llvm/lib/Target/Xtensa/XtensaRegisterInfo.h
+@@ -38,6 +38,13 @@ public:
+     return true;
+   }
+ 
++  // Xtensa's frame pointer aliases the adjusted stack pointer instead of the
++  // frame base, so PEI emergency spill slots must stay indexed from SP to keep
++  // large O0 frames scavengable.
++  bool useFPForScavengingIndex(const MachineFunction &MF) const override {
++    return false;
++  }
++
+   bool trackLivenessAfterRegAlloc(const MachineFunction &) const override {
+     return true;
+   }
+
 diff --git a/clang/tools/CMakeLists.txt b/clang/tools/CMakeLists.txt
 index 4733680cb..2e4a49e0a 100644
 --- a/clang/tools/CMakeLists.txt
