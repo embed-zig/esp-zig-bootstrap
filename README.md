@@ -43,4 +43,9 @@ Run the smoke test script:
 
 ## Release
 
+`release.sh` also accepts an optional build number. Passing `--build-number 1`
+produces release assets under `release/0.15.2-r1/` and uses artifact names such
+as `zig-0.15.2-r1-<target>-<mcpu>.tar.xz`. If omitted, the release naming stays
+at `0.15.2`.
+
 See [`RELEASE.md`](./RELEASE.md).

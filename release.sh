@@ -6,16 +6,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 usage() {
 	cat <<'EOF'
-Usage: ./release.sh <version> <target> <mcpu> [--publish]
+Usage: ./release.sh <version> <target> <mcpu> [--build-number <n>] [--publish]
 
 Examples:
   ./release.sh 0.15.2 aarch64-macos-none baseline
+  ./release.sh 0.15.2 aarch64-macos-none baseline --build-number 1
   ./release.sh 0.15.2 aarch64-macos-none baseline --publish
 
 Behavior:
-  1) Package .out/zig-<target>-<mcpu> into release/<version>/zig-<version>-<target>-<mcpu>.tar.xz
-  2) Generate/refresh release/<version>/SHA256SUMS
-  3) (optional) Publish via gh release create v<version>
+  1) Package .out/zig-<target>-<mcpu> into release/<version[-rN]>/zig-<version[-rN]>-<target>-<mcpu>.tar.xz
+  2) Generate/refresh release/<version[-rN]>/SHA256SUMS
+  3) (optional) Publish via gh release create v<version[-rN]>
 EOF
 }
 
@@ -24,7 +25,7 @@ die() {
 	exit 1
 }
 
-if [[ $# -lt 3 || $# -gt 4 ]]; then
+if [[ $# -lt 3 ]]; then
 	usage >&2
 	exit 1
 fi
@@ -33,19 +34,40 @@ VERSION="$1"
 TARGET="$2"
 MCPU="$3"
 PUBLISH=false
+BUILD_NUMBER=""
 
-if [[ $# -eq 4 ]]; then
-	if [[ "$4" != "--publish" ]]; then
-		die "Error: unknown option '$4'"
-	fi
-	PUBLISH=true
+shift 3
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	--publish)
+		PUBLISH=true
+		shift
+		;;
+	--build-number)
+		[[ $# -ge 2 ]] || die "Error: --build-number requires a value"
+		if [[ ! "$2" =~ ^r?[0-9]+$ ]]; then
+			die "Error: build number must be digits or r<digits>"
+		fi
+		BUILD_NUMBER="${2#r}"
+		shift 2
+		;;
+	*)
+		die "Error: unknown option '$1'"
+		;;
+	esac
+done
+
+VERSION_LABEL="$VERSION"
+if [[ -n "$BUILD_NUMBER" ]]; then
+	VERSION_LABEL="${VERSION}-r${BUILD_NUMBER}"
 fi
 
 VERSION_DIR="$SCRIPT_DIR/$VERSION"
 OUT_NAME="zig-${TARGET}-${MCPU}"
 OUT_DIR="$SCRIPT_DIR/.out/$OUT_NAME"
-ARTIFACT_NAME="zig-${VERSION}-${TARGET}-${MCPU}.tar.xz"
-RELEASE_DIR="$SCRIPT_DIR/release/$VERSION"
+ARTIFACT_NAME="zig-${VERSION_LABEL}-${TARGET}-${MCPU}.tar.xz"
+RELEASE_DIR="$SCRIPT_DIR/release/$VERSION_LABEL"
 ARTIFACT_PATH="$RELEASE_DIR/$ARTIFACT_NAME"
 CHECKSUM_PATH="$RELEASE_DIR/SHA256SUMS"
 
@@ -70,10 +92,10 @@ printf '  - %s\n' "$CHECKSUM_PATH"
 if [[ "$PUBLISH" == true ]]; then
 	command -v gh >/dev/null 2>&1 || die "Error: gh CLI is required for --publish"
 
-	TAG="v${VERSION}"
+	TAG="v${VERSION_LABEL}"
 	printf 'Publishing release %s ...\n' "$TAG"
 	gh release create "$TAG" "$ARTIFACT_PATH" "$CHECKSUM_PATH" \
 		--title "$TAG" \
-		--notes "Manual local build release for ${VERSION} (${TARGET}/${MCPU})."
+		--notes "Manual local build release for ${VERSION_LABEL} (${TARGET}/${MCPU})."
 	printf 'Release published: %s\n' "$TAG"
 fi

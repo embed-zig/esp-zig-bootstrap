@@ -9,7 +9,7 @@
 
 ```bash
 ./bootstrap.sh 0.15.2 aarch64-macos-none baseline
-./.out/zig-aarch64-macos-none-baseline/bin/zig version
+./.out/zig-aarch64-macos-none-baseline/zig version
 ```
 
 ## 2) Package and checksum
@@ -22,6 +22,17 @@ This generates:
 
 - `release/0.15.2/zig-0.15.2-aarch64-macos-none-baseline.tar.xz`
 - `release/0.15.2/SHA256SUMS`
+
+To add an optional release build number suffix:
+
+```bash
+./release.sh 0.15.2 aarch64-macos-none baseline --build-number 1
+```
+
+This generates:
+
+- `release/0.15.2-r1/zig-0.15.2-r1-aarch64-macos-none-baseline.tar.xz`
+- `release/0.15.2-r1/SHA256SUMS`
 
 ## 3) Manual publish (optional)
 
@@ -37,4 +48,20 @@ gh release create v0.15.2 \
   release/0.15.2/SHA256SUMS \
   --title "v0.15.2" \
   --notes "Manual local build release for 0.15.2 (aarch64-macos-none/baseline)."
+```
+
+With a build number suffix:
+
+```bash
+./release.sh 0.15.2 aarch64-macos-none baseline --build-number 1 --publish
+```
+
+This is equivalent to:
+
+```bash
+gh release create v0.15.2-r1 \
+  release/0.15.2-r1/zig-0.15.2-r1-aarch64-macos-none-baseline.tar.xz \
+  release/0.15.2-r1/SHA256SUMS \
+  --title "v0.15.2-r1" \
+  --notes "Manual local build release for 0.15.2-r1 (aarch64-macos-none/baseline)."
 ```
