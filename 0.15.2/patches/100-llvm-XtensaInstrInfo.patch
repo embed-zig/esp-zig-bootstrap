@@ -1,0 +1,30 @@
+diff --git a/llvm/lib/Target/Xtensa/XtensaInstrInfo.td b/llvm/lib/Target/Xtensa/XtensaInstrInfo.td
+index 753b936ea..bf6750bfa 100644
+--- a/llvm/lib/Target/Xtensa/XtensaInstrInfo.td
++++ b/llvm/lib/Target/Xtensa/XtensaInstrInfo.td
+@@ -1168,11 +1168,24 @@ let Predicates = [HasBoolean] in {
+   def : Pat<(v2i1 (build_vector AR:$a, AR:$b)),
+              (MOVBA2_P (OR AR:$a, (SLLI AR:$b, (i32 1))))>;
+
++  def : Pat<(v1i1 (Xtensa_trunc AR:$s)), (MOVBA_P AR:$s)>;
+   def : Pat<(v2i1 (Xtensa_trunc AR:$s)), (MOVBA2_P AR:$s)>;
+   def : Pat<(v4i1 (Xtensa_trunc AR:$s)), (MOVBA4_P AR:$s)>;
+
+   def : Pat<(i32 (vector_extract (v1i1 BR:$b), (i32 0))),
+             (EXTUI_BR_P (RSR BREG), BR:$b)>;
++  def : Pat<(i32 (vector_extract (v2i1 BR2:$b), (i32 0))),
++            (AND (EXTUI_BR2_P (RSR BREG), BR2:$b), (MOVI 1))>;
++  def : Pat<(i32 (vector_extract (v2i1 BR2:$b), (i32 1))),
++            (AND (SRLI (EXTUI_BR2_P (RSR BREG), BR2:$b), (i32 1)), (MOVI 1))>;
++  def : Pat<(i32 (vector_extract (v4i1 BR4:$b), (i32 0))),
++            (AND (EXTUI_BR4_P (RSR BREG), BR4:$b), (MOVI 1))>;
++  def : Pat<(i32 (vector_extract (v4i1 BR4:$b), (i32 1))),
++            (AND (SRLI (EXTUI_BR4_P (RSR BREG), BR4:$b), (i32 1)), (MOVI 1))>;
++  def : Pat<(i32 (vector_extract (v4i1 BR4:$b), (i32 2))),
++            (AND (SRLI (EXTUI_BR4_P (RSR BREG), BR4:$b), (i32 2)), (MOVI 1))>;
++  def : Pat<(i32 (vector_extract (v4i1 BR4:$b), (i32 3))),
++            (AND (SRLI (EXTUI_BR4_P (RSR BREG), BR4:$b), (i32 3)), (MOVI 1))>;
+   def : Pat<(v1i1 (load addr_ish1:$addr)), (MOVBA_P (L8UI mem8:$addr))>;
+   def : Pat<(v2i1 (load addr_ish1:$addr)), (MOVBA2_P (L8UI mem8:$addr))>;
+   def : Pat<(v4i1 (load addr_ish1:$addr)), (MOVBA4_P (L8UI mem8:$addr))>;
+

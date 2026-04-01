@@ -4,7 +4,7 @@ Current product scope is Zig bootstrap assets/scripts for `0.15.2` only.
 ## 1) Repository scope
 - Scripts: `bootstrap.sh`, `release.sh`, `smoke_test.sh`
 - Docs: `README.md`, `RELEASE.md`
-- Assets: `0.15.2/llvm-project`, `0.15.2/zig-bootstrap`, `0.15.2/espressif.patch`
+- Assets: `0.15.2/llvm-project`, `0.15.2/zig-bootstrap`, `0.15.2/patches/`
 - Gitignored local outputs: `.out/`, `release/`, `0.15.2/.build-*`, `0.15.2/.downloads/`, `0.15.2/.cache/`
 - Do not introduce other version folders unless explicitly requested.
 ## 2) Tooling baseline

@@ -1,0 +1,24 @@
+diff --git a/llvm/lib/Target/Xtensa/XtensaBRegFixupPass.cpp b/llvm/lib/Target/Xtensa/XtensaBRegFixupPass.cpp
+index 44f451be5..b27fecb49 100644
+--- a/llvm/lib/Target/Xtensa/XtensaBRegFixupPass.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaBRegFixupPass.cpp
+@@ -94,6 +94,7 @@ bool XtensaBRegFixup::VisitInstruction(
+   unsigned Opcode = MI->getOpcode();
+
+   switch (Opcode) {
++  case Xtensa::MOVBA4_P2:
+   case Xtensa::MOVBA2_P2:
+   case Xtensa::MOVBA_P2: {
+
+@@ -109,6 +110,10 @@ bool XtensaBRegFixup::VisitInstruction(
+       RegBase = Xtensa::B0_B1;
+       Arity = 2;
+       break;
++    case Xtensa::MOVBA4_P2:
++      RegBase = Xtensa::B0_B1_B2_B3;
++      Arity = 4;
++      break;
+     default:
+       llvm_unreachable("Unknown MOVBA opcode");
+     }
+

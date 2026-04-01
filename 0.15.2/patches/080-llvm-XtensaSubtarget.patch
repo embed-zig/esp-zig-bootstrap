@@ -1,0 +1,7 @@
+diff --git a/llvm/lib/Target/Xtensa/XtensaSubtarget.cpp b/llvm/lib/Target/Xtensa/XtensaSubtarget.cpp
+--- a/llvm/lib/Target/Xtensa/XtensaSubtarget.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaSubtarget.cpp
+@@ -25,1 +25,1 @@ static cl::opt<bool> TextSectionLiterals("mtext-section-literals",
+-                                         cl::init(false), cl::Hidden);
++                                         cl::init(true), cl::Hidden);
+

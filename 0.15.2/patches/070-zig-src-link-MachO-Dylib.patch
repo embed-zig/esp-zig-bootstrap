@@ -1,0 +1,38 @@
+diff --git a/zig/src/link/MachO/Dylib.zig b/zig/src/link/MachO/Dylib.zig
+--- a/zig/src/link/MachO/Dylib.zig
++++ b/zig/src/link/MachO/Dylib.zig
+@@ -732,6 +732,11 @@
+         };
+         const apple_string = try targetToAppleString(allocator, cpu_arch, platform);
+         try self.target_strings.append(allocator, apple_string);
++        if (cpu_arch == .aarch64) {
++            // Xcode 26.4 switched many macOS TBD target names from arm64 to arm64e.
++            const arm64e_target = try std.fmt.allocPrint(allocator, "arm64e{s}", .{apple_string["arm64".len..]});
++            try self.target_strings.append(allocator, arm64e_target);
++        }
+ 
+         switch (platform) {
+             .IOSSIMULATOR, .TVOSSIMULATOR, .WATCHOSSIMULATOR, .VISIONOSSIMULATOR => {
+@@ -739,6 +744,10 @@
+                 // hosts dylibs too.
+                 const host_target = try targetToAppleString(allocator, cpu_arch, .MACOS);
+                 try self.target_strings.append(allocator, host_target);
++                if (cpu_arch == .aarch64) {
++                    const arm64e_host_target = try std.fmt.allocPrint(allocator, "arm64e{s}", .{host_target["arm64".len..]});
++                    try self.target_strings.append(allocator, arm64e_host_target);
++                }
+             },
+             .MACOS => {
+                 // Turns out that around 10.13/10.14 macOS release version, Apple changed the target tags in
+@@ -748,6 +757,10 @@
+                     cpuArchToAppleString(cpu_arch),
+                 });
+                 try self.target_strings.append(allocator, fallback_target);
++                if (cpu_arch == .aarch64) {
++                    const arm64e_fallback_target = try std.fmt.allocPrint(allocator, "arm64e{s}", .{fallback_target["arm64".len..]});
++                    try self.target_strings.append(allocator, arm64e_fallback_target);
++                }
+             },
+             else => {},
+         }
+

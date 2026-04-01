@@ -1,0 +1,13 @@
+diff --git a/zig/src/codegen/llvm.zig b/zig/src/codegen/llvm.zig
+index 5c683a965..07c383510 100644
+--- a/zig/src/codegen/llvm.zig
++++ b/zig/src/codegen/llvm.zig
+@@ -13118,7 +13118,7 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
+                 llvm.LLVMInitializeXtensaTarget();
+                 llvm.LLVMInitializeXtensaTargetInfo();
+                 llvm.LLVMInitializeXtensaTargetMC();
+-                // There is no LLVMInitializeXtensaAsmPrinter function.
++                llvm.LLVMInitializeXtensaAsmPrinter();
+                 llvm.LLVMInitializeXtensaAsmParser();
+             }
+         },

@@ -59,6 +59,34 @@ download_file() {
 	die "Error: neither wget nor curl is available"
 }
 
+apply_patches() {
+	local patch_dir="$1"
+	local patch_file
+	local -a patch_files=()
+	local -a sorted_patch_files=()
+
+	if [[ -d "$patch_dir" ]]; then
+		shopt -s nullglob
+		patch_files=("$patch_dir"/*.patch)
+		shopt -u nullglob
+	fi
+
+	if [[ ${#patch_files[@]} -gt 0 ]]; then
+		while IFS= read -r patch_file; do
+			sorted_patch_files+=("$patch_file")
+		done < <(printf '%s\n' "${patch_files[@]}" | LC_ALL=C sort)
+		printf 'Applying %s patch file(s) from %s\n' "${#sorted_patch_files[@]}" "$patch_dir"
+		for patch_file in "${sorted_patch_files[@]}"; do
+			printf '  applying %s\n' "$(basename "$patch_file")"
+			patch -p1 <"$patch_file"
+		done
+		printf 'patches applied successfully\n'
+		return
+	fi
+
+	die "Error: no patch files found in '$patch_dir'"
+}
+
 if [[ $# -eq 0 ]]; then
 	show_usage >&2
 	exit 1
@@ -168,8 +196,7 @@ cp -R ../.downloads/llvm-project/lld lld
 cp -R ../.downloads/llvm-project/cmake cmake
 
 printf '\n=== Step 3: Applying patch to %s ===\n' "$BUILD_DIR"
-patch -p1 <../espressif.patch
-printf 'patch applied successfully\n'
+apply_patches "../patches"
 
 printf '\n=== Step 4: Building Zig ===\n'
 

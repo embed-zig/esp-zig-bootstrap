@@ -1,0 +1,134 @@
+diff --git a/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp b/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
+index 9d3b9c703..8e97ba369 100644
+--- a/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
+@@ -88,6 +88,14 @@ XtensaTargetLowering::XtensaTargetLowering(const TargetMachine &TM,
+     addRegisterClass(MVT::v1i1, &Xtensa::BRRegClass);
+     addRegisterClass(MVT::v2i1, &Xtensa::BR2RegClass);
+     addRegisterClass(MVT::v4i1, &Xtensa::BR4RegClass);
++    setOperationAction(ISD::BUILD_VECTOR, MVT::v1i1, Custom);
++    setOperationAction(ISD::BUILD_VECTOR, MVT::v2i1, Custom);
++    setOperationAction(ISD::BUILD_VECTOR, MVT::v4i1, Custom);
++    setOperationAction(ISD::CONCAT_VECTORS, MVT::v2i1, Custom);
++    setOperationAction(ISD::CONCAT_VECTORS, MVT::v4i1, Custom);
++    setOperationAction(ISD::OR, MVT::v1i1, Custom);
++    setOperationAction(ISD::OR, MVT::v2i1, Custom);
++    setOperationAction(ISD::OR, MVT::v4i1, Custom);
+     setOperationAction(ISD::Constant, MVT::v2i1, Expand);
+     setOperationAction(ISD::Constant, MVT::v1i1, Expand);
+     setTargetDAGCombine(ISD::STORE);
+@@ -943,6 +951,80 @@ static SDValue PerformSTORECombine(SDNode *N, SelectionDAG &DAG,
+                       StNode->getMemOperand());
+ }
+
++static bool isSmallBoolVector(EVT VT) {
++  return VT.isVector() && VT.getVectorElementType() == MVT::i1 &&
++         VT.getSizeInBits() <= 4;
++}
++
++static SDValue lowerSmallBoolVectorToMask(SDValue Op, SelectionDAG &DAG) {
++  SDLoc DL(Op);
++  EVT VT = Op.getValueType();
++  if (!isSmallBoolVector(VT))
++    return SDValue();
++
++  auto asI32 = [&](SDValue V) {
++    return DAG.getZExtOrTrunc(V, DL, MVT::i32);
++  };
++
++  switch (Op.getOpcode()) {
++  case XtensaISD::TRUNC:
++    return Op.getOperand(0);
++  case ISD::SCALAR_TO_VECTOR:
++    return asI32(Op.getOperand(0));
++  case ISD::BUILD_VECTOR: {
++    SDValue Mask = DAG.getConstant(0, DL, MVT::i32);
++    for (unsigned I = 0, E = Op->getNumOperands(); I != E; ++I) {
++      SDValue Part = asI32(Op.getOperand(I));
++      if (I != 0)
++        Part = DAG.getNode(ISD::SHL, DL, MVT::i32, Part,
++                           DAG.getConstant(I, DL, MVT::i32));
++      Mask = DAG.getNode(ISD::OR, DL, MVT::i32, Mask, Part);
++    }
++    return Mask;
++  }
++  case ISD::CONCAT_VECTORS: {
++    SDValue Mask = DAG.getConstant(0, DL, MVT::i32);
++    unsigned Shift = 0;
++    for (unsigned I = 0, E = Op->getNumOperands(); I != E; ++I) {
++      SDValue Part = lowerSmallBoolVectorToMask(Op.getOperand(I), DAG);
++      if (!Part)
++        return SDValue();
++      if (Shift != 0)
++        Part = DAG.getNode(ISD::SHL, DL, MVT::i32, Part,
++                           DAG.getConstant(Shift, DL, MVT::i32));
++      Mask = DAG.getNode(ISD::OR, DL, MVT::i32, Mask, Part);
++      Shift += Op.getOperand(I).getValueType().getSizeInBits();
++    }
++    return Mask;
++  }
++  case ISD::OR: {
++    SDValue LHS = lowerSmallBoolVectorToMask(Op.getOperand(0), DAG);
++    SDValue RHS = lowerSmallBoolVectorToMask(Op.getOperand(1), DAG);
++    if (!LHS || !RHS)
++      return SDValue();
++    return DAG.getNode(ISD::OR, DL, MVT::i32, LHS, RHS);
++  }
++  default:
++    return SDValue();
++  }
++}
++
++static SDValue lowerSmallBoolVectorOp(SDValue Op, SelectionDAG &DAG) {
++  EVT VT = Op.getValueType();
++  if (!isSmallBoolVector(VT))
++    return SDValue();
++
++  SDLoc DL(Op);
++  SDValue Mask = lowerSmallBoolVectorToMask(Op, DAG);
++  if (!Mask)
++    return SDValue();
++
++  unsigned WidthMask = (1u << VT.getSizeInBits()) - 1;
++  Mask = DAG.getNode(ISD::AND, DL, MVT::i32, Mask,
++                     DAG.getConstant(WidthMask, DL, MVT::i32));
++  return DAG.getNode(XtensaISD::TRUNC, DL, VT, Mask);
++}
++
+ SDValue XtensaTargetLowering::PerformDAGCombine(SDNode *N,
+                                                 DAGCombinerInfo &DCI) const {
+   SelectionDAG &DAG = DCI.DAG;
+@@ -1648,11 +1730,6 @@ SDValue XtensaTargetLowering::LowerImmediate(SDValue Op,
+   if (Op.getValueType() == MVT::i32) {
+     // Check if use node maybe lowered to the MOVI instruction
+     if (Value > -2048 && Value <= 2047)
+-      return Op;
+-    // Check if use node maybe lowered to the ADDMI instruction
+-    SDNode &OpNode = *Op.getNode();
+-    if ((OpNode.hasOneUse() && OpNode.user_begin()->getOpcode() == ISD::ADD) &&
+-        isShiftedInt<8, 8>(Value))
+       return Op;
+     Type *Ty = Type::getInt32Ty(*DAG.getContext());
+     Constant *CV = ConstantInt::get(Ty, Value);
+@@ -2266,6 +2343,10 @@ SDValue XtensaTargetLowering::LowerOperation(SDValue Op,
+     return LowerVACOPY(Op, DAG);
+   case ISD::ATOMIC_FENCE:
+     return LowerATOMIC_FENCE(Op, DAG);
++  case ISD::BUILD_VECTOR:
++  case ISD::CONCAT_VECTORS:
++  case ISD::OR:
++    return lowerSmallBoolVectorOp(Op, DAG);
+   case ISD::SHL_PARTS:
+     return LowerShiftLeftParts(Op, DAG);
+   case ISD::SRA_PARTS:
+@@ -3683,7 +3764,8 @@ MachineBasicBlock *XtensaTargetLowering::EmitInstrWithCustomInserter(
+     return MBB;
+   }
+   case Xtensa::MOVBA_P:
+-  case Xtensa::MOVBA2_P: {
++  case Xtensa::MOVBA2_P:
++  case Xtensa::MOVBA4_P: {
+     const TargetRegisterClass *AR = getRegClassFor(MVT::i32);
+
+     Register Dst1 = MRI.createVirtualRegister(AR);
+

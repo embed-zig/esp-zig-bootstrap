@@ -4,7 +4,7 @@ This repository currently maintains bootstrap assets and scripts for `0.15.2`:
 
 - `0.15.2/llvm-project`
 - `0.15.2/zig-bootstrap`
-- `0.15.2/espressif.patch`
+- `0.15.2/patches/`
 
 ## Build
 
@@ -19,6 +19,9 @@ Example:
 ```
 
 Build output is written to the repository root: `.out/zig-<target>-<mcpu>/`
+
+During bootstrap, patches are applied from `0.15.2/patches/*.patch` in lexical
+order.
 
 ## Clean
 

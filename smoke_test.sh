@@ -33,7 +33,8 @@ trap cleanup EXIT
 [[ -x "$BOOTSTRAP" ]] || fail "bootstrap.sh is missing or not executable"
 [[ -f "$SCRIPT_DIR/0.15.2/llvm-project" ]] || fail "0.15.2/llvm-project missing"
 [[ -f "$SCRIPT_DIR/0.15.2/zig-bootstrap" ]] || fail "0.15.2/zig-bootstrap missing"
-[[ -f "$SCRIPT_DIR/0.15.2/espressif.patch" ]] || fail "0.15.2/espressif.patch missing"
+[[ -d "$SCRIPT_DIR/0.15.2/patches" ]] || fail "0.15.2/patches missing"
+compgen -G "$SCRIPT_DIR/0.15.2/patches/*.patch" >/dev/null || fail "0.15.2/patches has no patch files"
 
 if [[ -d "$SCRIPT_DIR/.out" ]]; then
 	ROOT_OUT_BACKUP="$SCRIPT_DIR/.out.smoke-backup.$$"

@@ -1,0 +1,12 @@
+diff --git a/zig/src/codegen/llvm/bindings.zig b/zig/src/codegen/llvm/bindings.zig
+index 89bdb4b3d..bfff597f3 100644
+--- a/zig/src/codegen/llvm/bindings.zig
++++ b/zig/src/codegen/llvm/bindings.zig
+@@ -282,6 +282,7 @@ pub extern fn LLVMInitializeSystemZAsmPrinter() void;
+ pub extern fn LLVMInitializeWebAssemblyAsmPrinter() void;
+ pub extern fn LLVMInitializeX86AsmPrinter() void;
+ pub extern fn LLVMInitializeXCoreAsmPrinter() void;
++pub extern fn LLVMInitializeXtensaAsmPrinter() void;
+ pub extern fn LLVMInitializeM68kAsmPrinter() void;
+ pub extern fn LLVMInitializeVEAsmPrinter() void;
+ pub extern fn LLVMInitializeARCAsmPrinter() void;
