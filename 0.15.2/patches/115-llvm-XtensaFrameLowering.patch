@@ -1,0 +1,22 @@
+diff --git a/llvm/lib/Target/Xtensa/XtensaFrameLowering.cpp b/llvm/lib/Target/Xtensa/XtensaFrameLowering.cpp
+index 66d307f83..7d7eb4d02 100644
+--- a/llvm/lib/Target/Xtensa/XtensaFrameLowering.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaFrameLowering.cpp
+@@ -364,11 +364,14 @@ void XtensaFrameLowering::processFunctionBeforeFrameFinalized(
+      MachineFunction &MF, RegScavenger *RS) const {
+   // Set scavenging frame index if necessary.
+   MachineFrameInfo &MFI = MF.getFrameInfo();
+-  uint64_t MaxSPOffset = MFI.estimateStackSize(MF);
+   auto *XtensaFI = MF.getInfo<XtensaMachineFunctionInfo>();
+   unsigned ScavSlotsNum = 0;
+ 
+-  if (!isInt<12>(MaxSPOffset))
++  // eliminateFrameIndex() materializes out-of-range stack offsets with
++  // loadImmediate() and a temporary AR register. Narrow stack accesses can
++  // require this long before the total frame size exceeds 12 bits, so reserve
++  // one emergency spill slot whenever post-PEI frame-index scavenging is used.
++  if (TRI->requiresFrameIndexScavenging(MF))
+     ScavSlotsNum = 1;
+ 
+  // Far branches over 18-bit offset require a spill slot for scratch register.
+

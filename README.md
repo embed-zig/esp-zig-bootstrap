@@ -44,6 +44,25 @@ Run the smoke test script:
 ./smoke_test.sh
 ```
 
+## Regression Tests
+
+Committed Xtensa regression cases live under `0.15.2/regression/`.
+
+Run them with the current environment Zig:
+
+```bash
+./0.15.2/regression/run.sh
+```
+
+Or pick an explicit Zig:
+
+```bash
+ZIG=/path/to/zig ./0.15.2/regression/run.sh
+```
+
+See [`0.15.2/regression/README.md`](./0.15.2/regression/README.md) for the
+case list and usage details.
+
 ## Release
 
 `release.sh` also accepts an optional build number. Passing `--build-number 1`

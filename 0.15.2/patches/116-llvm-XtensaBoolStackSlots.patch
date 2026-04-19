@@ -1,0 +1,289 @@
+--- a/llvm/lib/Target/Xtensa/XtensaInstrInfo.td
++++ b/llvm/lib/Target/Xtensa/XtensaInstrInfo.td
+@@ -1201,8 +1201,30 @@
+     let mayStore = 1;
+   }
+ 
++  def SPILL_BOOL2: Pseudo<(outs), (ins BR2:$b, mem8:$mem),
++                           "!spill_bool2 $b, $mem",[]> {
++    let mayStore = 1;
++  }
++
++  def SPILL_BOOL4: Pseudo<(outs), (ins BR4:$b, mem8:$mem),
++                           "!spill_bool4 $b, $mem",[]> {
++    let mayStore = 1;
++  }
++
+   def RESTORE_BOOL: Pseudo<(outs BR:$out), (ins mem8:$mem),
+                             "!restore_bool $out, $mem",[]> {
++    let mayLoad = 1;
++    let Defs = [BREG];
++  }
++
++  def RESTORE_BOOL2: Pseudo<(outs BR2:$out), (ins mem8:$mem),
++                            "!restore_bool2 $out, $mem",[]> {
++    let mayLoad = 1;
++    let Defs = [BREG];
++  }
++
++  def RESTORE_BOOL4: Pseudo<(outs BR4:$out), (ins mem8:$mem),
++                            "!restore_bool4 $out, $mem",[]> {
+     let mayLoad = 1;
+     let Defs = [BREG];
+   }
+--- a/llvm/lib/Target/Xtensa/XtensaInstrInfo.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaInstrInfo.cpp
+@@ -44,6 +44,20 @@
+       MF.getMachineMemOperand(MachinePointerInfo::getFixedStack(MF, FI, Offset),
+                               Flags, MFFrame.getObjectSize(FI), Alignment);
+   return MIB.addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
++}
++
++static const TargetRegisterClass *
++getStackSlotRegClass(Register Reg, const TargetRegisterClass *RC) {
++  if (Reg.isPhysical()) {
++    if (Xtensa::BRRegClass.contains(Reg))
++      return &Xtensa::BRRegClass;
++    if (Xtensa::BR2RegClass.contains(Reg))
++      return &Xtensa::BR2RegClass;
++    if (Xtensa::BR4RegClass.contains(Reg))
++      return &Xtensa::BR4RegClass;
++  }
++
++  return RC;
+ }
+ 
+ XtensaInstrInfo::XtensaInstrInfo(const XtensaSubtarget &STI)
+@@ -180,6 +194,7 @@
+     MachineInstr::MIFlag Flags) const {
+   DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
+   unsigned LoadOpcode, StoreOpcode;
++  RC = getStackSlotRegClass(SrcReg, RC);
+   getLoadStoreOpcodes(RC, LoadOpcode, StoreOpcode, FrameIdx);
+   MachineInstrBuilder MIB = BuildMI(MBB, MBBI, DL, get(StoreOpcode))
+                                 .addReg(SrcReg, getKillRegState(isKill));
+@@ -192,6 +207,7 @@
+     Register VReg, MachineInstr::MIFlag Flags) const {
+   DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
+   unsigned LoadOpcode, StoreOpcode;
++  RC = getStackSlotRegClass(DestReg, RC);
+   getLoadStoreOpcodes(RC, LoadOpcode, StoreOpcode, FrameIdx);
+   addFrameReference(BuildMI(MBB, MBBI, DL, get(LoadOpcode), DestReg), FrameIdx);
+ }
+@@ -209,6 +225,12 @@
+   } else if (RC == &Xtensa::BRRegClass) {
+     LoadOpcode = Xtensa::RESTORE_BOOL;
+     StoreOpcode = Xtensa::SPILL_BOOL;
++  } else if (RC == &Xtensa::BR2RegClass) {
++    LoadOpcode = Xtensa::RESTORE_BOOL2;
++    StoreOpcode = Xtensa::SPILL_BOOL2;
++  } else if (RC == &Xtensa::BR4RegClass) {
++    LoadOpcode = Xtensa::RESTORE_BOOL4;
++    StoreOpcode = Xtensa::SPILL_BOOL4;
+   } else if (RC == &Xtensa::AE_DRRegClass) {
+     LoadOpcode = Xtensa::AE_L64_I;
+     StoreOpcode = Xtensa::AE_S64_I;
+--- a/llvm/lib/Target/Xtensa/XtensaRegisterInfo.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaRegisterInfo.cpp
+@@ -31,6 +31,29 @@
+ 
+ using namespace llvm;
+ 
++static bool getBoolStackOpcodeInfo(unsigned Opcode, unsigned &BRegBase,
++                                   unsigned &Arity) {
++  switch (Opcode) {
++  case Xtensa::SPILL_BOOL:
++  case Xtensa::RESTORE_BOOL:
++    BRegBase = Xtensa::B0;
++    Arity = 1;
++    return true;
++  case Xtensa::SPILL_BOOL2:
++  case Xtensa::RESTORE_BOOL2:
++    BRegBase = Xtensa::B0_B1;
++    Arity = 2;
++    return true;
++  case Xtensa::SPILL_BOOL4:
++  case Xtensa::RESTORE_BOOL4:
++    BRegBase = Xtensa::B0_B1_B2_B3;
++    Arity = 4;
++    return true;
++  default:
++    return false;
++  }
++}
++
+ XtensaRegisterInfo::XtensaRegisterInfo(const XtensaSubtarget &STI)
+     : XtensaGenRegisterInfo(Xtensa::A0), Subtarget(STI) {}
+ 
+@@ -144,22 +167,28 @@
+   DebugLoc DL = II->getDebugLoc();
+   const XtensaInstrInfo &TII = *static_cast<const XtensaInstrInfo *>(
+       MBB.getParent()->getSubtarget().getInstrInfo());
+-  unsigned BRegBase = Xtensa::B0;
++  unsigned BRegBase = 0;
++  unsigned Arity = 0;
+ 
+   switch (MI.getOpcode()) {
+-  case Xtensa::SPILL_BOOL: {
++  case Xtensa::SPILL_BOOL:
++  case Xtensa::SPILL_BOOL2:
++  case Xtensa::SPILL_BOOL4: {
++    if (!getBoolStackOpcodeInfo(MI.getOpcode(), BRegBase, Arity))
++      llvm_unreachable("Unknown bool spill opcode");
++
+     Register TempAR =
+         RS->scavengeRegisterBackwards(Xtensa::ARRegClass, II, false, 0);
+     RS->setRegUsed(TempAR);
+ 
+     BuildMI(MBB, II, DL, TII.get(Xtensa::RSR), TempAR).addReg(Xtensa::BREG);
+     MachineOperand &Breg = MI.getOperand(0);
+-    unsigned RegNo = Breg.getReg().id() - BRegBase;
++    unsigned Shift = (Breg.getReg().id() - BRegBase) * Arity;
+ 
+     BuildMI(MBB, II, DL, TII.get(Xtensa::EXTUI), TempAR)
+         .addReg(TempAR)
+-        .addImm(RegNo)
+-        .addImm(1);
++        .addImm(Shift)
++        .addImm(Arity);
+ 
+     BuildMI(MBB, II, DL, TII.get(Xtensa::S8I))
+         .addReg(TempAR, RegState::Kill)
+@@ -169,7 +198,11 @@
+     MI.eraseFromParent();
+     return true;
+   }
+-  case Xtensa::RESTORE_BOOL: {
++  case Xtensa::RESTORE_BOOL:
++  case Xtensa::RESTORE_BOOL2:
++  case Xtensa::RESTORE_BOOL4: {
++    if (!getBoolStackOpcodeInfo(MI.getOpcode(), BRegBase, Arity))
++      llvm_unreachable("Unknown bool restore opcode");
+ 
+     Register SrcAR =
+         RS->scavengeRegisterBackwards(Xtensa::ARRegClass, II, false, 0);
+@@ -182,7 +215,8 @@
+     RS->setRegUsed(BRegAR);
+ 
+     MachineOperand &Breg = MI.getOperand(0);
+-    unsigned RegNo = Breg.getReg().id() - BRegBase;
++    unsigned Shift = (Breg.getReg().id() - BRegBase) * Arity;
++    unsigned BaseMask = (1u << Arity) - 1;
+ 
+     BuildMI(MBB, II, DL, TII.get(Xtensa::L8UI), SrcAR)
+         .addReg(FrameReg, getKillRegState(IsKill))
+@@ -191,24 +225,18 @@
+     BuildMI(MBB, II, DL, TII.get(Xtensa::EXTUI), SrcAR)
+         .addReg(SrcAR)
+         .addImm(0)
+-        .addImm(1);
+-
+-    if (RegNo != 0) {
++        .addImm(Arity);
++
++    if (Shift != 0) {
+       BuildMI(MBB, II, DL, TII.get(Xtensa::SLLI), SrcAR)
+           .addReg(SrcAR)
+-          .addImm(RegNo);
++          .addImm(Shift);
+     }
+ 
+     BuildMI(MBB, II, DL, TII.get(Xtensa::RSR), BRegAR).addReg(Xtensa::BREG);
+ 
+-    unsigned Mask = ~(1 << RegNo) & 0x3ff;
+-    BuildMI(MBB, II, DL, TII.get(Xtensa::MOVI), MaskAR)
+-        .addImm(RegNo < 12 ? Mask : 1);
+-    if (RegNo >= 12) {
+-      BuildMI(MBB, II, DL, TII.get(Xtensa::SLLI), MaskAR)
+-          .addReg(MaskAR)
+-          .addImm(RegNo);
+-    }
++    int64_t Mask = 0xffff & (~(BaseMask << Shift));
++    TII.buildLoadImmediate(MBB, II, MaskAR, Mask);
+     BuildMI(MBB, II, DL, TII.get(Xtensa::AND), BRegAR)
+         .addReg(BRegAR)
+         .addReg(MaskAR);
+--- a/llvm/lib/Target/Xtensa/XtensaFrameLowering.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaFrameLowering.cpp
+@@ -382,10 +382,12 @@
+   for (const MachineBasicBlock &MBB : MF) {
+     for (const MachineInstr &MI : MBB) {
+       unsigned Opcode = MI.getOpcode();
+-      if (Opcode == Xtensa::SPILL_BOOL)
++      if (Opcode == Xtensa::SPILL_BOOL || Opcode == Xtensa::SPILL_BOOL2 ||
++          Opcode == Xtensa::SPILL_BOOL4)
+         NeedRegs += 1;
+ 
+-      if (Opcode == Xtensa::RESTORE_BOOL)
++      if (Opcode == Xtensa::RESTORE_BOOL || Opcode == Xtensa::RESTORE_BOOL2 ||
++          Opcode == Xtensa::RESTORE_BOOL4)
+         NeedRegs += 3;
+     }
+   }
+--- a/llvm/test/CodeGen/Xtensa/xtensa-xtbool-spill.ll
++++ b/llvm/test/CodeGen/Xtensa/xtensa-xtbool-spill.ll
+@@ -1,5 +1,63 @@
+ ; NOTE: Assertions have been autogenerated by utils/update_llc_test_checks.py UTC_ARGS: --version 5
+-; RUN: llc -O0 -mtriple=xtensa -mcpu=esp32 %s -o - | FileCheck %s
++; RUN: llc -O0 -verify-machineinstrs -mtriple=xtensa -mcpu=esp32 %s -o - | FileCheck %s
++
++define <2 x i1> @spill_phi_ret_v2(i1 %cond) {
++; CHECK-LABEL: spill_phi_ret_v2:
++; CHECK: movi.n [[SPILLADDR:a[0-9]+]], {{[0-9]+}}
++; CHECK: add.n [[SPILLADDR]], a1, [[SPILLADDR]]
++; CHECK: rsr [[PACKSRC:a[0-9]+]], br
++; CHECK: extui [[PACKSRC]], [[PACKSRC]], 0, 2
++; CHECK: s8i [[PACKSRC]], [[SPILLADDR]], 0
++; CHECK: movi.n [[RELOADADDR:a[0-9]+]], {{[0-9]+}}
++; CHECK: add.n [[RELOADADDR]], a1, [[RELOADADDR]]
++; CHECK: l8ui [[RELOAD:a[0-9]+]], [[RELOADADDR]], 0
++; CHECK: extui [[RELOAD]], [[RELOAD]], 0, 2
++; CHECK: wsr {{a[0-9]+}}, br
++entry:
++  br i1 %cond, label %then, label %else
++
++then:
++  br label %merge
++
++else:
++  br label %merge
++
++merge:
++  %r = phi <2 x i1> [<i1 true, i1 false>, %then], [<i1 false, i1 true>, %else]
++  ret <2 x i1> %r
++}
++
++define <4 x i1> @spill_phi_ret_v4(i1 %cond) {
++; CHECK-LABEL: spill_phi_ret_v4:
++; CHECK: movi.n [[SPILLADDR:a[0-9]+]], {{[0-9]+}}
++; CHECK: add.n [[SPILLADDR]], a1, [[SPILLADDR]]
++; CHECK: rsr [[PACKSRC:a[0-9]+]], br
++; CHECK: extui [[PACKSRC]], [[PACKSRC]], 0, 4
++; CHECK: s8i [[PACKSRC]], [[SPILLADDR]], 0
++; CHECK: movi.n [[RELOADADDR:a[0-9]+]], {{[0-9]+}}
++; CHECK: add.n [[RELOADADDR]], a1, [[RELOADADDR]]
++; CHECK: l8ui [[RELOAD:a[0-9]+]], [[RELOADADDR]], 0
++; CHECK: extui [[RELOAD]], [[RELOAD]], 0, 4
++; CHECK: wsr {{a[0-9]+}}, br
++entry:
++  br i1 %cond, label %then, label %else
++
++then:
++  br label %merge
++
++else:
++  br label %merge
++
++merge:
++  %r = phi <4 x i1> [
++    <i1 true, i1 false, i1 true, i1 false>,
++    %then
++  ], [
++    <i1 false, i1 true, i1 false, i1 true>,
++    %else
++  ]
++  ret <4 x i1> %r
++}
+ 
+ define <1 x i1> @test_spill(<1 x i1> %b0, <1 x i1> %b1)
+ ; CHECK-LABEL: test_spill:

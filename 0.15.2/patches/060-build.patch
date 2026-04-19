@@ -18,12 +18,13 @@ index 3d15ab1be..f00aa8a3f 100755
    -DLLD_BUILD_TOOLS=OFF
  cmake --build . --target install
  
-@@ -199,6 +201,7 @@ $ZIG build \
+@@ -198,6 +200,7 @@ $ZIG build \
    --prefix "$ROOTDIR/out/zig-$TARGET-$MCPU" \
    --search-prefix "$ROOTDIR/out/$TARGET-$MCPU" \
    -Dflat \
 +  -Dllvm-has-xtensa \
    -Dstatic-llvm \
    -Doptimize=ReleaseFast \
+   -Dstrip \
    -Dstrip \
 

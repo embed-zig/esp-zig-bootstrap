@@ -1,0 +1,17 @@
+diff --git a/build b/build
+index f00aa8a3f..448913d16 100755
+--- a/build
++++ b/build
+@@ -136,6 +136,12 @@ $ZIG build-lib \
+   "$ROOTDIR/zstd/lib/dictBuilder/divsufsort.c" \
+   "$ROOTDIR/zstd/lib/dictBuilder/fastcover.c" \
+   "$ROOTDIR/zstd/lib/dictBuilder/cover.c"
++
++if [ "$TARGET_OS_CMAKE" = "Windows" ] && [ -f "$ROOTDIR/out/$TARGET-$MCPU/lib/zstd.lib" ]; then
++  # LLVM's Findzstd.cmake only recognizes zstd_static.lib as a static library on MSVC-like targets.
++  cp "$ROOTDIR/out/$TARGET-$MCPU/lib/zstd.lib" \
++    "$ROOTDIR/out/$TARGET-$MCPU/lib/zstd_static.lib"
++fi
+ 
+ # Rebuild LLVM with Zig.
+ mkdir -p "$ROOTDIR/out/build-llvm-$TARGET-$MCPU"

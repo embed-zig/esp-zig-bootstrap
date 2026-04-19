@@ -1,0 +1,14 @@
+diff --git a/llvm/cmake/modules/Findzstd.cmake b/llvm/cmake/modules/Findzstd.cmake
+--- a/llvm/cmake/modules/Findzstd.cmake
++++ b/llvm/cmake/modules/Findzstd.cmake
+@@ -54,8 +54,8 @@ if(zstd_FOUND)
+           IMPORTED_LOCATION "${zstd_LIBRARY}")
+     endif()
+   endif()
+-  if(zstd_STATIC_LIBRARY MATCHES "${zstd_STATIC_LIBRARY_SUFFIX}$" AND
+-     NOT TARGET zstd::libzstd_static)
++  if(zstd_STATIC_LIBRARY AND
++     NOT TARGET zstd::libzstd_static)
+     add_library(zstd::libzstd_static STATIC IMPORTED)
+     set_target_properties(zstd::libzstd_static PROPERTIES
+         INTERFACE_INCLUDE_DIRECTORIES "${zstd_INCLUDE_DIR}"

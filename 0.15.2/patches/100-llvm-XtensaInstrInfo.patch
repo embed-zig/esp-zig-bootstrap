@@ -1,15 +1,15 @@
-diff --git a/llvm/lib/Target/Xtensa/XtensaInstrInfo.td b/llvm/lib/Target/Xtensa/XtensaInstrInfo.td
-index 753b936ea..bf6750bfa 100644
 --- a/llvm/lib/Target/Xtensa/XtensaInstrInfo.td
 +++ b/llvm/lib/Target/Xtensa/XtensaInstrInfo.td
-@@ -1168,11 +1168,24 @@ let Predicates = [HasBoolean] in {
+@@ -1168,11 +1168,26 @@
    def : Pat<(v2i1 (build_vector AR:$a, AR:$b)),
               (MOVBA2_P (OR AR:$a, (SLLI AR:$b, (i32 1))))>;
-
+ 
 +  def : Pat<(v1i1 (Xtensa_trunc AR:$s)), (MOVBA_P AR:$s)>;
    def : Pat<(v2i1 (Xtensa_trunc AR:$s)), (MOVBA2_P AR:$s)>;
    def : Pat<(v4i1 (Xtensa_trunc AR:$s)), (MOVBA4_P AR:$s)>;
-
+ 
++  def : Pat<(i32 (bitconvert (v1i1 BR:$b))),
++            (EXTUI_BR_P (RSR BREG), BR:$b)>;
    def : Pat<(i32 (vector_extract (v1i1 BR:$b), (i32 0))),
              (EXTUI_BR_P (RSR BREG), BR:$b)>;
 +  def : Pat<(i32 (vector_extract (v2i1 BR2:$b), (i32 0))),
@@ -27,4 +27,38 @@ index 753b936ea..bf6750bfa 100644
    def : Pat<(v1i1 (load addr_ish1:$addr)), (MOVBA_P (L8UI mem8:$addr))>;
    def : Pat<(v2i1 (load addr_ish1:$addr)), (MOVBA2_P (L8UI mem8:$addr))>;
    def : Pat<(v4i1 (load addr_ish1:$addr)), (MOVBA4_P (L8UI mem8:$addr))>;
-
+--- a/llvm/lib/Target/Xtensa/XtensaInstrInfo.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaInstrInfo.cpp
+@@ -114,6 +114,16 @@
+                                   MCRegister SrcReg, bool KillSrc,
+                                   bool RenamableDest, bool RenamableSrc) const {
+   unsigned Opcode;
++  auto CopyBoolSubRegs = [&](std::initializer_list<unsigned> SubRegs) {
++    unsigned Index = 0;
++    for (unsigned SubReg : SubRegs) {
++      ++Index;
++      copyPhysReg(MBB, MBBI, DL, RI.getSubReg(DestReg, SubReg),
++                  RI.getSubReg(SrcReg, SubReg),
++                  KillSrc && Index == SubRegs.size(), RenamableDest,
++                  RenamableSrc);
++    }
++  };
+ 
+   // when we are copying a phys reg we want the bits for fp
+   if (Xtensa::ARRegClass.contains(DestReg, SrcReg)) {
+@@ -135,6 +145,15 @@
+     BuildMI(MBB, MBBI, DL, get(Xtensa::ORB), DestReg)
+         .addReg(SrcReg, getKillRegState(KillSrc))
+         .addReg(SrcReg, getKillRegState(KillSrc));
++    return;
++  } else if (STI.hasBoolean() &&
++             Xtensa::BR2RegClass.contains(DestReg, SrcReg)) {
++    CopyBoolSubRegs({Xtensa::bsub0, Xtensa::bsub1});
++    return;
++  } else if (STI.hasBoolean() &&
++             Xtensa::BR4RegClass.contains(DestReg, SrcReg)) {
++    CopyBoolSubRegs(
++        {Xtensa::bsub0, Xtensa::bsub1, Xtensa::bsub2, Xtensa::bsub3});
+     return;
+   } else if (STI.hasHIFI3() && Xtensa::AE_DRRegClass.contains(DestReg, SrcReg))
+     Opcode = Xtensa::AE_MOV;
