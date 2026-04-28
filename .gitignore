@@ -2,13 +2,13 @@ openteam/
 .DS_Store
 
 # build cache and outputs
-.out/
 release/
-0.15.2/.build-*/
-0.15.2/.downloads/
-0.15.2/.cache/
-0.15.2/.out/
-0.15.2/.wget/
+.out/
+.build-*/
+.downloads/
+.cache/
+.wget/
+.patch-*/
 
 # local instructions
 

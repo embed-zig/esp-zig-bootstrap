@@ -1,0 +1,783 @@
+--- a/llvm/lib/Target/Xtensa/XtensaISelLowering.h
++++ b/llvm/lib/Target/Xtensa/XtensaISelLowering.h
+@@ -158,6 +158,9 @@
+ 
+   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+ 
++  void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue> &Results,
++                          SelectionDAG &DAG) const override;
++
+   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
+                                bool isVarArg,
+                                const SmallVectorImpl<ISD::InputArg> &Ins,
+@@ -241,6 +244,8 @@
+ 
+   SDValue LowerVectorShift(SDValue Op, SelectionDAG &DAG) const;
+ 
++  SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
++
+   SDValue LowerBITCAST(SDValue Op, SelectionDAG &DAG) const;
+ 
+   SDValue LowerBitVecLOAD(SDValue Op, SelectionDAG &DAG) const;
+--- a/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
+@@ -88,26 +88,68 @@
+ 
+   if (Subtarget.hasBoolean()) {
+     addRegisterClass(MVT::v1i1, &Xtensa::BRRegClass);
+-    if (Subtarget.hasHIFI3()) {
+-      addRegisterClass(MVT::v2i1, &Xtensa::BR2RegClass);
+-      addRegisterClass(MVT::v4i1, &Xtensa::BR4RegClass);
+-    }
++    addRegisterClass(MVT::v2i1, &Xtensa::BR2RegClass);
++    addRegisterClass(MVT::v4i1, &Xtensa::BR4RegClass);
++    setOperationAction(ISD::BUILD_VECTOR, MVT::v1i1, Custom);
++    setOperationAction(ISD::BUILD_VECTOR, MVT::v2i1, Custom);
++    setOperationAction(ISD::BUILD_VECTOR, MVT::v3i1, Custom);
++    setOperationAction(ISD::BUILD_VECTOR, MVT::v4i1, Custom);
++    setOperationAction(ISD::INSERT_VECTOR_ELT, MVT::v1i1, Custom);
++    setOperationAction(ISD::INSERT_VECTOR_ELT, MVT::v2i1, Custom);
++    setOperationAction(ISD::INSERT_VECTOR_ELT, MVT::v3i1, Custom);
++    setOperationAction(ISD::INSERT_VECTOR_ELT, MVT::v4i1, Custom);
++    setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v1i1, Custom);
++    setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v2i1, Custom);
++    setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v3i1, Custom);
++    setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v4i1, Custom);
++    setOperationAction(ISD::CONCAT_VECTORS, MVT::v2i1, Custom);
++    setOperationAction(ISD::CONCAT_VECTORS, MVT::v3i1, Custom);
++    setOperationAction(ISD::CONCAT_VECTORS, MVT::v4i1, Custom);
++    setOperationAction(ISD::VECTOR_SHUFFLE, MVT::v1i1, Custom);
++    setOperationAction(ISD::VECTOR_SHUFFLE, MVT::v2i1, Custom);
++    setOperationAction(ISD::VECTOR_SHUFFLE, MVT::v3i1, Custom);
++    setOperationAction(ISD::VECTOR_SHUFFLE, MVT::v4i1, Custom);
++    setOperationAction(ISD::AND, MVT::v1i1, Custom);
++    setOperationAction(ISD::AND, MVT::v2i1, Custom);
++    setOperationAction(ISD::AND, MVT::v3i1, Custom);
++    setOperationAction(ISD::AND, MVT::v4i1, Custom);
++    setOperationAction(ISD::OR, MVT::v1i1, Custom);
++    setOperationAction(ISD::OR, MVT::v2i1, Custom);
++    setOperationAction(ISD::OR, MVT::v3i1, Custom);
++    setOperationAction(ISD::OR, MVT::v4i1, Custom);
++    setOperationAction(ISD::XOR, MVT::v1i1, Custom);
++    setOperationAction(ISD::XOR, MVT::v2i1, Custom);
++    setOperationAction(ISD::XOR, MVT::v3i1, Custom);
++    setOperationAction(ISD::XOR, MVT::v4i1, Custom);
++    setOperationAction(ISD::SELECT, MVT::v1i1, Custom);
++    setOperationAction(ISD::SELECT, MVT::v2i1, Custom);
++    setOperationAction(ISD::SELECT, MVT::v3i1, Custom);
++    setOperationAction(ISD::SELECT, MVT::v4i1, Custom);
++    setOperationAction(ISD::SELECT_CC, MVT::v1i1, Custom);
++    setOperationAction(ISD::SELECT_CC, MVT::v2i1, Custom);
++    setOperationAction(ISD::SELECT_CC, MVT::v3i1, Custom);
++    setOperationAction(ISD::SELECT_CC, MVT::v4i1, Custom);
++    setOperationAction(ISD::VSELECT, MVT::v1i1, Custom);
++    setOperationAction(ISD::VSELECT, MVT::v2i1, Custom);
++    setOperationAction(ISD::VSELECT, MVT::v3i1, Custom);
++    setOperationAction(ISD::VSELECT, MVT::v4i1, Custom);
++    setOperationAction(ISD::BITCAST, MVT::v3i1, Custom);
+     setOperationAction(ISD::Constant, MVT::v2i1, Expand);
+     setOperationAction(ISD::Constant, MVT::v1i1, Expand);
++    setOperationAction(ISD::Constant, MVT::v3i1, Expand);
+     setTargetDAGCombine(ISD::STORE);
+     setTargetDAGCombine(ISD::BITCAST);
+     setTargetDAGCombine(ISD::EXTRACT_SUBVECTOR);
+  
+     setOperationAction(ISD::STORE, MVT::v1i1, Legal);
+-    if (Subtarget.hasHIFI3()) {
+-      setOperationAction(ISD::STORE, MVT::v2i1, Legal);
+-      setOperationAction(ISD::STORE, MVT::v4i1, Legal);
+-    }
++    setOperationAction(ISD::STORE, MVT::v2i1, Legal);
++    setOperationAction(ISD::STORE, MVT::v4i1, Legal);
++    setOperationAction(ISD::LOAD, MVT::v3i1, Custom);
+     setOperationAction(ISD::LOAD, MVT::v1i1, Legal);
+-    if (Subtarget.hasHIFI3()) {
+-      setOperationAction(ISD::LOAD, MVT::v2i1, Legal);
+-      setOperationAction(ISD::LOAD, MVT::v4i1, Legal);
+-    }
++    setOperationAction(ISD::LOAD, MVT::v2i1, Legal);
++    setOperationAction(ISD::LOAD, MVT::v4i1, Legal);
++    setTargetDAGCombine(ISD::ZERO_EXTEND);
++    setTargetDAGCombine(ISD::ANY_EXTEND);
+   }
+ 
+   if (Subtarget.hasHIFI3()) {
+@@ -656,59 +698,107 @@
+   return SDValue();
+ }
+ 
++static bool isSmallBoolVector(EVT VT);
++static EVT getSmallBoolVectorResultVT(EVT VT);
++static SDValue getSmallBoolVectorValueMask(SDValue Vec, SelectionDAG &DAG);
++static SDValue clampSmallBoolVectorMask(SDValue Mask, EVT VT, SDLoc DL,
++                                        SelectionDAG &DAG);
++
+ static SDValue PerformBITCASTCombine(SDNode *N, SelectionDAG &DAG,
+                                      TargetLowering::DAGCombinerInfo &DCI,
+                                      const XtensaSubtarget &Subtarget) {
+-  // (vNi1 (bitcast (iN (trunc i32)))) -> (vNi1 (xtensa_bitcast i32))
+   SDLoc DL(N);
+   SDValue Op = N->getOperand(0);
+-
+-  if (N->getOpcode() != ISD::BITCAST || Op.getOpcode() != ISD::TRUNCATE)
++  EVT VT = N->getValueType(0);
++
++  if (N->getOpcode() != ISD::BITCAST)
++    return SDValue();
++
++  if (VT == MVT::i1 && Op.getValueType() == MVT::v1i1) {
++    SDValue Mask = DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op);
++    return DAG.getNode(ISD::TRUNCATE, DL, MVT::i1, Mask);
++  }
++
++  if (VT == MVT::i32 && isSmallBoolVector(Op.getValueType()))
++    return getSmallBoolVectorValueMask(Op, DAG);
++
++  // (vNi1 (bitcast (iN (trunc i32)))) -> (vNi1 (xtensa_trunc i32))
++  if (Op.getOpcode() != ISD::TRUNCATE)
+     return SDValue();
+ 
+   SDValue Int = Op.getOperand(0);
+-  llvm::EVT BoolVT = N->getValueType(0);
+-
+-  if (!BoolVT.isVector() || BoolVT.getVectorElementType() != MVT::i1 ||
+-      Int.getValueType() != MVT::i32)
+-    return SDValue();
+-
+-  SDValue Trunc = DAG.getNode(XtensaISD::TRUNC, DL, BoolVT, Int);
+-
+-  return Trunc;
++  if (!isSmallBoolVector(VT) || Int.getValueType() != MVT::i32)
++    return SDValue();
++
++  return DAG.getNode(XtensaISD::TRUNC, DL, getSmallBoolVectorResultVT(VT),
++                     Int);
+ }
+ 
+ static SDValue
+ PerformExtractSubvectorCombine(SDNode *N, SelectionDAG &DAG,
+                                TargetLowering::DAGCombinerInfo &DCI,
+                                const XtensaSubtarget &Subtarget) {
+-  // (vNi1 (extract_subvector (v8i1 (load x))) -> (vNi1 (load x))
++  // (vNi1 (extract_subvector (vMi1 (load x)))) -> (vNi1 (load x))
++  // (vNi1 (extract_subvector (vMi1 (xtensa_trunc mask)))) ->
++  //     (vNi1 (xtensa_trunc (mask >> idx)))
+   SDLoc DL(N);
+-  SDValue Load = N->getOperand(0);
++  SDValue Vec = N->getOperand(0);
+ 
+   if (N->getOpcode() != ISD::EXTRACT_SUBVECTOR)
+     return SDValue();
+ 
+-  EVT LoadVT = Load.getValueType();
++  EVT VecVT = Vec.getValueType();
+   EVT BoolVT = N->getValueType(0);
+ 
+   if (!BoolVT.isVector() || BoolVT.getVectorElementType() != MVT::i1)
+     return SDValue();
+ 
+-  if (Load.getOpcode() != ISD::LOAD)
+-    return SDValue();
+-
+-  LoadSDNode *LdNode = cast<LoadSDNode>(Load.getNode());
+-
+-  if (!LoadVT.isVector() || LoadVT.getVectorElementType() != MVT::i1)
+-    return SDValue();
+-
+-  SDValue NewLoad =
+-      DAG.getLoad(BoolVT, DL, LdNode->getChain(), LdNode->getBasePtr(),
+-                  LdNode->getPointerInfo(), LdNode->getBaseAlign(),
+-                  LdNode->getMemOperand()->getFlags());
+-
+-  return NewLoad;
++  if (!VecVT.isVector() || VecVT.getVectorElementType() != MVT::i1)
++    return SDValue();
++
++  auto *IdxNode = dyn_cast<ConstantSDNode>(N->getOperand(1));
++  if (!IdxNode)
++    return SDValue();
++
++  unsigned Idx = IdxNode->getZExtValue();
++  if (Idx + BoolVT.getVectorNumElements() > VecVT.getVectorNumElements())
++    return SDValue();
++
++  if (Vec.getOpcode() == ISD::LOAD) {
++    LoadSDNode *LdNode = cast<LoadSDNode>(Vec.getNode());
++    if (Idx == 0)
++      return DAG.getLoad(BoolVT, DL, LdNode->getChain(), LdNode->getBasePtr(),
++                         LdNode->getPointerInfo(), LdNode->getBaseAlign(),
++                         LdNode->getMemOperand()->getFlags());
++
++    if (!isSmallBoolVector(BoolVT) || VecVT.getSizeInBits() > 8)
++      return SDValue();
++
++    SDValue Mask =
++        DAG.getExtLoad(ISD::ZEXTLOAD, DL, MVT::i32, LdNode->getChain(),
++                       LdNode->getBasePtr(), LdNode->getPointerInfo(), MVT::i8,
++                       LdNode->getBaseAlign(),
++                       LdNode->getMemOperand()->getFlags());
++    Mask = DAG.getNode(ISD::SRL, DL, MVT::i32, Mask,
++                       DAG.getConstant(Idx, DL, MVT::i32));
++    Mask = clampSmallBoolVectorMask(Mask, BoolVT, DL, DAG);
++    return DAG.getNode(XtensaISD::TRUNC, DL, getSmallBoolVectorResultVT(BoolVT),
++                       Mask);
++  }
++
++  if (!isSmallBoolVector(BoolVT) || !isSmallBoolVector(VecVT))
++    return SDValue();
++
++  SDValue Mask = getSmallBoolVectorValueMask(Vec, DAG);
++  if (!Mask)
++    return SDValue();
++
++  if (Idx != 0)
++    Mask = DAG.getNode(ISD::SRL, DL, MVT::i32, Mask,
++                       DAG.getConstant(Idx, DL, MVT::i32));
++  Mask = clampSmallBoolVectorMask(Mask, BoolVT, DL, DAG);
++  return DAG.getNode(XtensaISD::TRUNC, DL, getSmallBoolVectorResultVT(BoolVT),
++                     Mask);
+ }
+ 
+ static SDValue PerformSTORECombine(SDNode *N, SelectionDAG &DAG,
+@@ -740,6 +830,414 @@
+ 
+   return DAG.getStore(StNode->getChain(), DL, Val, StNode->getBasePtr(),
+                       StNode->getMemOperand());
++}
++
++static bool isSmallBoolVector(EVT VT) {
++  return VT.isVector() && VT.getVectorElementType() == MVT::i1 &&
++         VT.getSizeInBits() <= 4;
++}
++
++static SDValue getSmallBoolVectorWidthMask(EVT VT, SDLoc DL,
++                                           SelectionDAG &DAG) {
++  return DAG.getConstant((1u << VT.getSizeInBits()) - 1, DL, MVT::i32);
++}
++
++static EVT getSmallBoolVectorResultVT(EVT VT) {
++  return VT == MVT::v3i1 ? MVT::v4i1 : VT;
++}
++
++static SDValue clampSmallBoolVectorMask(SDValue Mask, EVT VT, SDLoc DL,
++                                        SelectionDAG &DAG) {
++  return DAG.getNode(ISD::AND, DL, MVT::i32, Mask,
++                     getSmallBoolVectorWidthMask(VT, DL, DAG));
++}
++
++static SDValue lowerSmallBoolVectorToMask(SDValue Op, SelectionDAG &DAG) {
++  SDLoc DL(Op);
++  EVT VT = Op.getValueType();
++  if (!isSmallBoolVector(VT))
++    return SDValue();
++
++  auto asI32 = [&](SDValue V) {
++    if (V.getValueType() == MVT::i1)
++      if (auto *Load = dyn_cast<LoadSDNode>(V))
++        return DAG.getExtLoad(ISD::ZEXTLOAD, DL, MVT::i32, Load->getChain(),
++                              Load->getBasePtr(), Load->getPointerInfo(),
++                              MVT::i8, Load->getBaseAlign(),
++                              Load->getMemOperand()->getFlags());
++    return DAG.getZExtOrTrunc(V, DL, MVT::i32);
++  };
++  auto extractElt = [&](SDValue Vec, unsigned Idx) {
++    if (Vec.isUndef())
++      return DAG.getConstant(0, DL, MVT::i32);
++    if (SDValue Mask = getSmallBoolVectorValueMask(Vec, DAG)) {
++      if (Idx != 0)
++        Mask = DAG.getNode(ISD::SRL, DL, MVT::i32, Mask,
++                           DAG.getConstant(Idx, DL, MVT::i32));
++      return DAG.getNode(ISD::AND, DL, MVT::i32, Mask,
++                         DAG.getConstant(1, DL, MVT::i32));
++    }
++    return asI32(DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL,
++                             VT.getVectorElementType(), Vec,
++                             DAG.getConstant(Idx, DL, MVT::i32)));
++  };
++
++  switch (Op.getOpcode()) {
++  case XtensaISD::TRUNC:
++    return clampSmallBoolVectorMask(Op.getOperand(0), VT, DL, DAG);
++  case ISD::SCALAR_TO_VECTOR:
++    return asI32(Op.getOperand(0));
++  case ISD::BUILD_VECTOR: {
++    SDValue Mask = DAG.getConstant(0, DL, MVT::i32);
++    for (unsigned I = 0, E = Op->getNumOperands(); I != E; ++I) {
++      SDValue Part = asI32(Op.getOperand(I));
++      if (I != 0)
++        Part = DAG.getNode(ISD::SHL, DL, MVT::i32, Part,
++                           DAG.getConstant(I, DL, MVT::i32));
++      Mask = DAG.getNode(ISD::OR, DL, MVT::i32, Mask, Part);
++    }
++    return Mask;
++  }
++  case ISD::INSERT_VECTOR_ELT: {
++    auto *IdxNode = dyn_cast<ConstantSDNode>(Op.getOperand(2));
++    if (!IdxNode)
++      return SDValue();
++    unsigned Idx = IdxNode->getZExtValue();
++    if (Idx >= VT.getVectorNumElements())
++      return SDValue();
++    SDValue Mask = DAG.getConstant(0, DL, MVT::i32);
++    for (unsigned I = 0, E = VT.getVectorNumElements(); I != E; ++I) {
++      SDValue Part =
++          I == Idx ? asI32(Op.getOperand(1)) : extractElt(Op.getOperand(0), I);
++      if (I != 0)
++        Part = DAG.getNode(ISD::SHL, DL, MVT::i32, Part,
++                           DAG.getConstant(I, DL, MVT::i32));
++      Mask = DAG.getNode(ISD::OR, DL, MVT::i32, Mask, Part);
++    }
++    return Mask;
++  }
++  case ISD::CONCAT_VECTORS: {
++    SDValue Mask = DAG.getConstant(0, DL, MVT::i32);
++    unsigned Shift = 0;
++    for (unsigned I = 0, E = Op->getNumOperands(); I != E; ++I) {
++      SDValue Part = lowerSmallBoolVectorToMask(Op.getOperand(I), DAG);
++      if (!Part)
++        return SDValue();
++      if (Shift != 0)
++        Part = DAG.getNode(ISD::SHL, DL, MVT::i32, Part,
++                           DAG.getConstant(Shift, DL, MVT::i32));
++      Mask = DAG.getNode(ISD::OR, DL, MVT::i32, Mask, Part);
++      Shift += Op.getOperand(I).getValueType().getSizeInBits();
++    }
++    return Mask;
++  }
++  case ISD::VECTOR_SHUFFLE: {
++    auto *Shuffle = cast<ShuffleVectorSDNode>(Op);
++    SDValue Mask = DAG.getConstant(0, DL, MVT::i32);
++    unsigned NumElts = VT.getVectorNumElements();
++    for (unsigned I = 0; I != NumElts; ++I) {
++      int MaskElt = Shuffle->getMaskElt(I);
++      SDValue Part;
++      if (MaskElt < 0) {
++        Part = DAG.getConstant(0, DL, MVT::i32);
++      } else if (static_cast<unsigned>(MaskElt) < NumElts) {
++        Part = extractElt(Op.getOperand(0), MaskElt);
++      } else if (static_cast<unsigned>(MaskElt) < NumElts * 2) {
++        Part = extractElt(Op.getOperand(1), MaskElt - NumElts);
++      } else {
++        return SDValue();
++      }
++      if (I != 0)
++        Part = DAG.getNode(ISD::SHL, DL, MVT::i32, Part,
++                           DAG.getConstant(I, DL, MVT::i32));
++      Mask = DAG.getNode(ISD::OR, DL, MVT::i32, Mask, Part);
++    }
++    return Mask;
++  }
++  case ISD::AND:
++  case ISD::OR:
++  case ISD::XOR: {
++    SDValue LHS = getSmallBoolVectorValueMask(Op.getOperand(0), DAG);
++    SDValue RHS = getSmallBoolVectorValueMask(Op.getOperand(1), DAG);
++    if (!LHS || !RHS)
++      return SDValue();
++    return DAG.getNode(Op.getOpcode(), DL, MVT::i32, LHS, RHS);
++  }
++  case ISD::SELECT_CC: {
++    SDValue TrueMask = getSmallBoolVectorValueMask(Op.getOperand(2), DAG);
++    SDValue FalseMask = getSmallBoolVectorValueMask(Op.getOperand(3), DAG);
++    if (!TrueMask || !FalseMask)
++      return SDValue();
++    return DAG.getNode(ISD::SELECT_CC, DL, MVT::i32, Op.getOperand(0),
++                       Op.getOperand(1), TrueMask, FalseMask, Op.getOperand(4));
++  }
++  case ISD::SELECT: {
++    SDValue TrueMask = getSmallBoolVectorValueMask(Op.getOperand(1), DAG);
++    SDValue FalseMask = getSmallBoolVectorValueMask(Op.getOperand(2), DAG);
++    if (!TrueMask || !FalseMask)
++      return SDValue();
++    SDValue Cond = DAG.getZExtOrTrunc(Op.getOperand(0), DL, MVT::i32);
++    return DAG.getNode(ISD::SELECT_CC, DL, MVT::i32, Cond,
++                       DAG.getConstant(0, DL, MVT::i32), TrueMask, FalseMask,
++                       DAG.getCondCode(ISD::SETNE));
++  }
++  case ISD::VSELECT: {
++    SDValue Cond = getSmallBoolVectorValueMask(Op.getOperand(0), DAG);
++    SDValue TrueMask = getSmallBoolVectorValueMask(Op.getOperand(1), DAG);
++    SDValue FalseMask = getSmallBoolVectorValueMask(Op.getOperand(2), DAG);
++    if (!Cond || !TrueMask || !FalseMask)
++      return SDValue();
++
++    SDValue WidthMask = getSmallBoolVectorWidthMask(VT, DL, DAG);
++    SDValue InvertedCond =
++        DAG.getNode(ISD::XOR, DL, MVT::i32, Cond, WidthMask);
++    SDValue WhenTrue = DAG.getNode(ISD::AND, DL, MVT::i32, Cond, TrueMask);
++    SDValue WhenFalse =
++        DAG.getNode(ISD::AND, DL, MVT::i32, InvertedCond, FalseMask);
++    return DAG.getNode(ISD::OR, DL, MVT::i32, WhenTrue, WhenFalse);
++  }
++  default:
++    return SDValue();
++  }
++}
++
++static SDValue lowerSmallBoolVectorOp(SDValue Op, SelectionDAG &DAG) {
++  EVT VT = Op.getValueType();
++  if (!isSmallBoolVector(VT))
++    return SDValue();
++
++  SDLoc DL(Op);
++  SDValue Mask = lowerSmallBoolVectorToMask(Op, DAG);
++  if (!Mask)
++    return SDValue();
++
++  Mask = clampSmallBoolVectorMask(Mask, VT, DL, DAG);
++  return DAG.getNode(XtensaISD::TRUNC, DL, getSmallBoolVectorResultVT(VT),
++                     Mask);
++}
++
++static SDValue getSmallBoolVectorValueMask(SDValue Vec, SelectionDAG &DAG) {
++  EVT VecVT = Vec.getValueType();
++  if (!isSmallBoolVector(VecVT))
++    return SDValue();
++
++  SDLoc DL(Vec);
++  if (auto *Load = dyn_cast<LoadSDNode>(Vec)) {
++    SDValue Mask =
++        DAG.getExtLoad(ISD::ZEXTLOAD, DL, MVT::i32, Load->getChain(),
++                       Load->getBasePtr(), Load->getPointerInfo(), MVT::i8,
++                       Load->getBaseAlign(), Load->getMemOperand()->getFlags());
++    return clampSmallBoolVectorMask(Mask, VecVT, DL, DAG);
++  }
++
++  return lowerSmallBoolVectorToMask(Vec, DAG);
++}
++
++static SDValue widenSmallBoolVectorResult(SDValue Vec, EVT WidenVT,
++                                          SelectionDAG &DAG) {
++  SDValue Mask = getSmallBoolVectorValueMask(Vec, DAG);
++  if (!Mask)
++    return SDValue();
++
++  SDLoc DL(Vec);
++  return DAG.getNode(XtensaISD::TRUNC, DL, WidenVT, Mask);
++}
++
++static SDValue lowerSmallBoolVectorExtract(SDValue Op, SelectionDAG &DAG) {
++  SDValue Vec = Op.getOperand(0);
++  EVT VecVT = Vec.getValueType();
++  if (!isSmallBoolVector(VecVT))
++    return SDValue();
++
++  auto *IdxNode = dyn_cast<ConstantSDNode>(Op.getOperand(1));
++  if (!IdxNode)
++    return SDValue();
++
++  unsigned Idx = IdxNode->getZExtValue();
++  if (Idx >= VecVT.getVectorNumElements())
++    return SDValue();
++
++  SDLoc DL(Op);
++  SDValue Mask = getSmallBoolVectorValueMask(Vec, DAG);
++  if (!Mask)
++    return SDValue();
++
++  if (Idx != 0)
++    Mask = DAG.getNode(ISD::SRL, DL, MVT::i32, Mask,
++                       DAG.getConstant(Idx, DL, MVT::i32));
++  Mask = DAG.getNode(ISD::AND, DL, MVT::i32, Mask,
++                     DAG.getConstant(1, DL, MVT::i32));
++  return DAG.getSetCC(DL, Op.getValueType(), Mask,
++                      DAG.getConstant(0, DL, MVT::i32), ISD::SETNE);
++}
++
++static SDValue combineExtendedSmallBoolVectorExtract(SDValue Op,
++                                                     SelectionDAG &DAG) {
++  SDLoc DL(Op);
++  EVT VT = Op.getValueType();
++  SDValue Extract = Op.getOperand(0);
++
++  if (Extract.getValueType() == MVT::i1)
++    if (auto *Load = dyn_cast<LoadSDNode>(Extract))
++      return DAG.getExtLoad(ISD::ZEXTLOAD, DL, VT, Load->getChain(),
++                            Load->getBasePtr(), Load->getPointerInfo(), MVT::i8,
++                            Load->getBaseAlign(),
++                            Load->getMemOperand()->getFlags());
++
++  auto getBoolConst = [&](SDValue V, bool &Result) {
++    auto *C = dyn_cast<ConstantSDNode>(V);
++    if (!C)
++      return false;
++    const APInt &Val = C->getAPIntValue();
++    if (Val.isZero()) {
++      Result = false;
++      return true;
++    }
++    if (Val.isOne() || Val.isAllOnes()) {
++      Result = true;
++      return true;
++    }
++    return false;
++  };
++  auto getBitMask = [&](SDValue V) -> SDValue {
++    auto normalizeBitAnd = [&](SDValue AndNode, unsigned ShiftAmt) -> SDValue {
++      if (AndNode.getOpcode() != ISD::AND)
++        return SDValue();
++
++      ConstantSDNode *MaskNode = dyn_cast<ConstantSDNode>(AndNode.getOperand(0));
++      SDValue Value = AndNode.getOperand(1);
++      if (!MaskNode) {
++        MaskNode = dyn_cast<ConstantSDNode>(AndNode.getOperand(1));
++        Value = AndNode.getOperand(0);
++      }
++      if (!MaskNode)
++        return SDValue();
++
++      const APInt &Mask = MaskNode->getAPIntValue();
++      if (ShiftAmt == 0) {
++        if (!Mask.isOne())
++          return SDValue();
++      } else {
++        if (Mask.ugt(APInt::getLowBitsSet(Mask.getBitWidth(), ShiftAmt + 1)))
++          return SDValue();
++        if (!Mask[ShiftAmt])
++          return SDValue();
++      }
++
++      if (ShiftAmt != 0)
++        Value = DAG.getNode(ISD::SRL, DL, VT, Value,
++                            DAG.getConstant(ShiftAmt, DL, VT));
++      return DAG.getNode(ISD::AND, DL, VT, Value, DAG.getConstant(1, DL, VT));
++    };
++
++    if (V.getOpcode() == ISD::AND)
++      return normalizeBitAnd(V, 0);
++
++    if (V.getOpcode() != ISD::SRL)
++      return SDValue();
++
++    auto *ShiftNode = dyn_cast<ConstantSDNode>(V.getOperand(1));
++    if (!ShiftNode)
++      return SDValue();
++
++    return normalizeBitAnd(V.getOperand(0), ShiftNode->getZExtValue());
++  };
++
++  switch (Extract.getOpcode()) {
++  case ISD::SETCC: {
++    ISD::CondCode CC = cast<CondCodeSDNode>(Extract.getOperand(2))->get();
++    if ((CC != ISD::SETNE && CC != ISD::SETEQ) ||
++        !isa<ConstantSDNode>(Extract.getOperand(1)) ||
++        !cast<ConstantSDNode>(Extract.getOperand(1))->isZero())
++      return SDValue();
++    SDValue Mask = getBitMask(Extract.getOperand(0));
++    if (!Mask)
++      return SDValue();
++    if (CC == ISD::SETNE)
++      return Mask;
++    return DAG.getNode(ISD::XOR, DL, VT, Mask, DAG.getConstant(1, DL, VT));
++  }
++  case ISD::SELECT_CC: {
++    bool TrueVal = false;
++    bool FalseVal = false;
++    if (!getBoolConst(Extract.getOperand(2), TrueVal) ||
++        !getBoolConst(Extract.getOperand(3), FalseVal) ||
++        TrueVal == FalseVal)
++      return SDValue();
++    ISD::CondCode CC = cast<CondCodeSDNode>(Extract.getOperand(4))->get();
++    if ((CC != ISD::SETNE && CC != ISD::SETEQ) ||
++        !isa<ConstantSDNode>(Extract.getOperand(1)) ||
++        !cast<ConstantSDNode>(Extract.getOperand(1))->isZero())
++      return SDValue();
++    SDValue Mask = getBitMask(Extract.getOperand(0));
++    if (!Mask)
++      return SDValue();
++    bool OneWhenMaskOne = (CC == ISD::SETNE) ? TrueVal : FalseVal;
++    if (OneWhenMaskOne)
++      return Mask;
++    return DAG.getNode(ISD::XOR, DL, VT, Mask, DAG.getConstant(1, DL, VT));
++  }
++  default:
++    break;
++  }
++
++  if (Extract.getOpcode() != ISD::EXTRACT_VECTOR_ELT)
++    return SDValue();
++
++  SDValue Vec = Extract.getOperand(0);
++  EVT VecVT = Vec.getValueType();
++  if (!isSmallBoolVector(VecVT))
++    return SDValue();
++
++  auto *IdxNode = dyn_cast<ConstantSDNode>(Extract.getOperand(1));
++  if (!IdxNode)
++    return SDValue();
++
++  unsigned Idx = IdxNode->getZExtValue();
++  if (Idx >= VecVT.getVectorNumElements())
++    return SDValue();
++
++  SDValue Mask = getSmallBoolVectorValueMask(Vec, DAG);
++  if (!Mask)
++    return SDValue();
++
++  if (Idx != 0)
++    Mask = DAG.getNode(ISD::SRL, DL, MVT::i32, Mask,
++                       DAG.getConstant(Idx, DL, MVT::i32));
++  Mask = DAG.getNode(ISD::AND, DL, MVT::i32, Mask,
++                     DAG.getConstant(1, DL, MVT::i32));
++  return DAG.getZExtOrTrunc(Mask, DL, Op.getValueType());
++}
++
++void XtensaTargetLowering::ReplaceNodeResults(
++    SDNode *N, SmallVectorImpl<SDValue> &Results, SelectionDAG &DAG) const {
++  if (N->getNumValues() == 0 || N->getValueType(0) != MVT::v3i1)
++    return;
++
++  SDLoc DL(N);
++  switch (N->getOpcode()) {
++  case ISD::LOAD: {
++    auto *Load = cast<LoadSDNode>(N);
++    SDValue Mask =
++        DAG.getExtLoad(ISD::ZEXTLOAD, DL, MVT::i32, Load->getChain(),
++                       Load->getBasePtr(), Load->getPointerInfo(), MVT::i8,
++                       Load->getBaseAlign(),
++                       Load->getMemOperand()->getFlags());
++    Mask = clampSmallBoolVectorMask(Mask, MVT::v3i1, DL, DAG);
++    Results.push_back(DAG.getNode(XtensaISD::TRUNC, DL, MVT::v4i1, Mask));
++    Results.push_back(Mask.getValue(1));
++    return;
++  }
++  default: {
++    SDValue Wide = widenSmallBoolVectorResult(SDValue(N, 0), MVT::v4i1, DAG);
++    if (!Wide)
++      return;
++    Results.push_back(Wide);
++    for (unsigned I = 1, E = N->getNumValues(); I != E; ++I)
++      Results.push_back(SDValue(N, I));
++    return;
++  }
++  }
+ }
+ 
+ SDValue XtensaTargetLowering::PerformDAGCombine(SDNode *N,
+@@ -760,6 +1258,9 @@
+     return PerformExtractSubvectorCombine(N, DAG, DCI, Subtarget);
+   case ISD::STORE:
+     return PerformSTORECombine(N, DAG, DCI, Subtarget);
++  case ISD::ZERO_EXTEND:
++  case ISD::ANY_EXTEND:
++    return combineExtendedSmallBoolVectorExtract(SDValue(N, 0), DAG);
+   }
+ 
+   return SDValue();
+@@ -874,6 +1375,8 @@
+                                                         CallingConv::ID CC,
+                                                         EVT VT) const {
+   if (VT.isFloatingPoint())
++    return MVT::i32;
++  if (VT.isInteger() && VT.getSizeInBits() < 32 && VT.getSizeInBits() != 1)
+     return MVT::i32;
+ 
+   return TargetLowering::getRegisterTypeForCallingConv(Context, CC, VT);
+@@ -1393,6 +1896,31 @@
+   SDValue FalseValue = Op.getOperand(3);
+   ISD::CondCode CC = cast<CondCodeSDNode>(Op->getOperand(4))->get();
+ 
++  if (isSmallBoolVector(TrueValue.getValueType())) {
++    SDValue TrueMask = lowerSmallBoolVectorToMask(TrueValue, DAG);
++    SDValue FalseMask = lowerSmallBoolVectorToMask(FalseValue, DAG);
++    if (!TrueMask || !FalseMask)
++      return SDValue();
++
++    SDValue Mask;
++    if (LHS.getValueType() == MVT::f32) {
++      unsigned BrOpcode;
++      unsigned CmpOpCode;
++      std::tie(BrOpcode, CmpOpCode) = getFPBranchKind(CC);
++      SDValue TargetCC = DAG.getConstant(CmpOpCode, DL, MVT::i32);
++      SDValue TargetBC = DAG.getConstant(BrOpcode, DL, MVT::i32);
++      Mask = DAG.getNode(XtensaISD::SELECT_CC_FP, DL, MVT::i32,
++                         {LHS, RHS, TrueMask, FalseMask, TargetCC, TargetBC},
++                         Op->getFlags());
++    } else {
++      Mask = DAG.getNode(ISD::SELECT_CC, DL, MVT::i32, LHS, RHS, TrueMask,
++                         FalseMask, Op.getOperand(4));
++    }
++    return DAG.getNode(XtensaISD::TRUNC, DL,
++                       getSmallBoolVectorResultVT(TrueValue.getValueType()),
++                       Mask);
++  }
++
+   if (TrueValue.getValueType().isVector())
+     return Op;
+ 
+@@ -1989,9 +2517,33 @@
+ SDValue XtensaTargetLowering::LowerBitVecLOAD(SDValue Op,
+                                               SelectionDAG &DAG) const {
+   SDLoc DL(Op);
+-  EVT VT = Op.getValueType();
+-  assert(VT.isVector() && VT.getSizeInBits() <= 8);
++  assert(Op.getValueType().isVector() && Op.getValueType().getSizeInBits() <= 8);
+   return SDValue(); // Expand
++}
++
++SDValue XtensaTargetLowering::LowerSELECT(SDValue Op,
++                                          SelectionDAG &DAG) const {
++  SDLoc DL(Op);
++  SDValue Cond = Op.getOperand(0);
++  SDValue TrueValue = Op.getOperand(1);
++  SDValue FalseValue = Op.getOperand(2);
++  EVT VT = TrueValue.getValueType();
++
++  if (!isSmallBoolVector(VT))
++    return SDValue();
++
++  SDValue TrueMask = lowerSmallBoolVectorToMask(TrueValue, DAG);
++  SDValue FalseMask = lowerSmallBoolVectorToMask(FalseValue, DAG);
++  if (!TrueMask || !FalseMask)
++    return SDValue();
++
++  Cond = DAG.getZExtOrTrunc(Cond, DL, MVT::i32);
++  SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
++  SDValue Mask =
++      DAG.getNode(ISD::SELECT_CC, DL, MVT::i32, Cond, Zero, TrueMask,
++                  FalseMask, DAG.getCondCode(ISD::SETNE));
++  return DAG.getNode(XtensaISD::TRUNC, DL, getSmallBoolVectorResultVT(VT),
++                     Mask);
+ }
+ 
+ SDValue XtensaTargetLowering::LowerOperation(SDValue Op,
+@@ -2015,6 +2567,8 @@
+     return LowerCTPOP(Op, DAG);
+   case ISD::ConstantPool:
+     return LowerConstantPool(Op, DAG);
++  case ISD::SELECT:
++    return LowerSELECT(Op, DAG);
+   case ISD::SELECT_CC:
+     return LowerSELECT_CC(Op, DAG);
+   case ISD::STACKSAVE:
+@@ -2042,6 +2596,20 @@
+     return LowerFunnelShift(Op, DAG);
+   case ISD::BITCAST:
+     return LowerBITCAST(Op, DAG);
++  case ISD::BUILD_VECTOR:
++  case ISD::INSERT_VECTOR_ELT:
++  case ISD::CONCAT_VECTORS:
++  case ISD::VECTOR_SHUFFLE:
++  case ISD::AND:
++  case ISD::OR:
++  case ISD::XOR:
++  case ISD::VSELECT:
++    return lowerSmallBoolVectorOp(Op, DAG);
++  case ISD::EXTRACT_VECTOR_ELT:
++    return lowerSmallBoolVectorExtract(Op, DAG);
++  case ISD::ZERO_EXTEND:
++  case ISD::ANY_EXTEND:
++    return combineExtendedSmallBoolVectorExtract(Op, DAG);
+   default:
+     report_fatal_error("Unexpected node to lower");
+   }
+@@ -2544,7 +3112,8 @@
+     return MBB;
+   }
+   case Xtensa::MOVBA_P:
+-  case Xtensa::MOVBA2_P: {
++  case Xtensa::MOVBA2_P:
++  case Xtensa::MOVBA4_P: {
+     const TargetRegisterClass *AR = getRegClassFor(MVT::i32);
+ 
+     Register Dst1 = MRI.createVirtualRegister(AR);

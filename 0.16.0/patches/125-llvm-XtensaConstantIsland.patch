@@ -1,0 +1,38 @@
+--- a/llvm/lib/Target/Xtensa/XtensaConstantIsland.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaConstantIsland.cpp
+@@ -80,9 +80,15 @@
+     cl::Hidden);
+ 
+ // TODO
+-// This defines for L32R and J instruction displacemnt for 
+-// testing purposes only
+-#define MAX_DISP_L32R 262144
++// This defines for L32R and J instruction displacemnt for
++// testing purposes only.
++//
++// L32R carries a signed 16-bit immediate scaled by 4, i.e. a signed 18-bit
++// byte displacement. The largest positive encodable offset is 32767 * 4 =
++// 131068 bytes; 131072 would require a non-encodable +32768 immediate. Keep
++// the placement bound at that exact limit so constant islands do not get
++// placed farther away than the assembler fixup can encode.
++#define MAX_DISP_L32R ((1 << 17) - 4)
+ #define BITS_JUMP 18
+ 
+ static unsigned int branchTargetOperand(MachineInstr *MI) {
+@@ -1259,6 +1265,7 @@
+   unsigned CPSize = ConstantPool->getConstants().size();
+   unsigned Idx = ConstantPool->getConstantPoolIndex(C, Align(4));
+   Register DestReg = MRI.createVirtualRegister(&Xtensa::ARRegClass);
++  unsigned UserOffset = getOffsetOf(MI);
+ 
+   MachineInstr *CPEMI = nullptr;
+   // Add a new CPEntry, but no corresponding CPUser yet.
+@@ -1278,7 +1285,7 @@
+     std::vector<CPEntry> &CPEs = CPEntries[Idx];
+     for (CPEntry &CPE : CPEs) {
+       if ((CPE.CPEMI != nullptr) &&
+-          isCPEntryInRange(MI, MAX_DISP_L32R, CPE.CPEMI, MAX_DISP_L32R, true)) {
++          isCPEntryInRange(MI, UserOffset, CPE.CPEMI, MAX_DISP_L32R, true)) {
+         CPEMI = CPE.CPEMI;
+         CPE.RefCount++;
+       }

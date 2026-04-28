@@ -1,0 +1,26 @@
+--- a/build
++++ b/build
+@@ -38,6 +38,7 @@
+   -DLLVM_ENABLE_OCAMLDOC=OFF \
+   -DLLVM_ENABLE_PLUGINS=OFF \
+   -DLLVM_ENABLE_PROJECTS="lld;clang" \
++  -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=Xtensa \
+   -DLLVM_ENABLE_Z3_SOLVER=OFF \
+   -DLLVM_ENABLE_ZSTD=OFF \
+   -DLLVM_INCLUDE_UTILS=OFF \
+@@ -162,6 +163,7 @@
+   -DLLVM_ENABLE_OCAMLDOC=OFF \
+   -DLLVM_ENABLE_PLUGINS=OFF \
+   -DLLVM_ENABLE_PROJECTS="lld;clang" \
++  -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=Xtensa \
+   -DLLVM_ENABLE_Z3_SOLVER=OFF \
+   -DLLVM_ENABLE_ZLIB=FORCE_ON \
+   -DLLVM_ENABLE_ZSTD=FORCE_ON \
+@@ -198,6 +200,7 @@
+   --prefix "$ROOTDIR/out/zig-$TARGET-$MCPU" \
+   --search-prefix "$ROOTDIR/out/$TARGET-$MCPU" \
+   -Dflat \
++  -Dllvm-has-xtensa \
+   -Dstatic-llvm \
+   -Doptimize=ReleaseFast \
+   -Dstrip \

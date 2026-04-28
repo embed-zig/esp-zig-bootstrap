@@ -194,6 +194,9 @@ cp -R ../.downloads/llvm-project/llvm llvm
 cp -R ../.downloads/llvm-project/clang clang
 cp -R ../.downloads/llvm-project/lld lld
 cp -R ../.downloads/llvm-project/cmake cmake
+if [[ -d ../.downloads/llvm-project/third-party ]]; then
+	cp -R ../.downloads/llvm-project/third-party third-party
+fi
 
 printf '\n=== Step 3: Applying patch to %s ===\n' "$BUILD_DIR"
 apply_patches "../patches"

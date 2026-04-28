@@ -6,17 +6,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 usage() {
 	cat <<'EOF'
-Usage: ./release.sh <version> <target> <mcpu> [--build-number <n>] [--publish]
+Usage: ./release.sh <version> <target> <mcpu> --build-number <n> [--publish]
 
 Examples:
-  ./release.sh 0.15.2 aarch64-macos-none baseline
   ./release.sh 0.15.2 aarch64-macos-none baseline --build-number 1
-  ./release.sh 0.15.2 aarch64-macos-none baseline --publish
+  ./release.sh 0.16.0 aarch64-macos-none baseline --build-number r1 --publish
 
 Behavior:
-  1) Package .out/zig-<target>-<mcpu> into release/<version[-rN]>/zig-<version[-rN]>-<target>-<mcpu>.tar.xz
-  2) Generate/refresh release/<version[-rN]>/SHA256SUMS
-  3) (optional) Publish via gh release create v<version[-rN]>
+  1) Package .out/zig-<target>-<mcpu> into release/<version-rN>/zig-<version-rN>-<target>-<mcpu>.tar.xz
+  2) Generate/refresh release/<version-rN>/SHA256SUMS
+  3) (optional) Publish via gh release create v<version-rN>
 EOF
 }
 
@@ -58,10 +57,11 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-VERSION_LABEL="$VERSION"
-if [[ -n "$BUILD_NUMBER" ]]; then
-	VERSION_LABEL="${VERSION}-r${BUILD_NUMBER}"
+if [[ -z "$BUILD_NUMBER" ]]; then
+	die "Error: --build-number is required; releases must use v<version>-rN tags"
 fi
+
+VERSION_LABEL="${VERSION}-r${BUILD_NUMBER}"
 
 VERSION_DIR="$SCRIPT_DIR/$VERSION"
 OUT_NAME="zig-${TARGET}-${MCPU}"

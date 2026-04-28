@@ -1,0 +1,18 @@
+diff --git a/llvm/lib/Target/Xtensa/XtensaRegisterInfo.h b/llvm/lib/Target/Xtensa/XtensaRegisterInfo.h
+index e2f3b51f7..eb5b0ba85 100644
+--- a/llvm/lib/Target/Xtensa/XtensaRegisterInfo.h
++++ b/llvm/lib/Target/Xtensa/XtensaRegisterInfo.h
+@@ -38,6 +38,13 @@ public:
+     return true;
+   }
+ 
++  // Xtensa's frame pointer aliases the adjusted stack pointer instead of the
++  // frame base, so PEI emergency spill slots must stay indexed from SP to keep
++  // large O0 frames scavengable.
++  bool useFPForScavengingIndex(const MachineFunction &MF) const override {
++    return false;
++  }
++
+   bool trackLivenessAfterRegAlloc(const MachineFunction &) const override {
+     return true;
+   }

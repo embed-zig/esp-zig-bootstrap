@@ -1,12 +1,13 @@
 # AGENTS.md
 Guide for coding agents in `esp-zig-bootstrap`.
-Current product scope is Zig bootstrap assets/scripts for `0.15.2` only.
+Current product scope is Zig bootstrap assets/scripts for version-scoped Zig
+bootstrap directories such as `0.15.2/` and `0.16.0/`.
 ## 1) Repository scope
 - Scripts: `bootstrap.sh`, `release.sh`, `smoke_test.sh`
 - Docs: `README.md`, `RELEASE.md`
-- Assets: `0.15.2/llvm-project`, `0.15.2/zig-bootstrap`, `0.15.2/patches/`
-- Gitignored local outputs: `.out/`, `release/`, `0.15.2/.build-*`, `0.15.2/.downloads/`, `0.15.2/.cache/`
-- Do not introduce other version folders unless explicitly requested.
+- Assets: `<version>/llvm-project`, `<version>/zig-bootstrap`, `<version>/patches/`
+- Gitignored local outputs: `.out/`, `release/`, `<version>/.build-*`, `<version>/.downloads/`, `<version>/.cache/`
+- Do not introduce new version folders unless explicitly requested.
 ## 2) Tooling baseline
 - Required: `bash`, `git`, `patch`, `tar`, `shasum`
 - Download transport: `wget` or `curl`
@@ -72,23 +73,23 @@ Single-scenario commands:
 ./bootstrap.sh clean 0.15.2 aarch64-linux-gnu baseline
 
 # package one target
-./release.sh 0.15.2 aarch64-macos-none baseline
+./release.sh 0.15.2 aarch64-macos-none baseline --build-number 1
 ```
 ## 4) Release commands
 ### Package + checksum (single target)
 ```bash
-./release.sh 0.15.2 aarch64-macos-none baseline
+./release.sh 0.15.2 aarch64-macos-none baseline --build-number 1
 ```
 Expected files:
-- `release/0.15.2/zig-0.15.2-aarch64-macos-none-baseline.tar.xz`
-- `release/0.15.2/SHA256SUMS`
+- `release/0.15.2-r1/zig-0.15.2-r1-aarch64-macos-none-baseline.tar.xz`
+- `release/0.15.2-r1/SHA256SUMS`
 ### Manual publish path
 ```bash
-./release.sh 0.15.2 aarch64-macos-none baseline --publish
+./release.sh 0.15.2 aarch64-macos-none baseline --build-number 1 --publish
 ```
 ### Multi-target release workflow
 1. Run `release.sh` once per target.
-2. Regenerate one combined `release/0.15.2/SHA256SUMS` over all `zig-0.15.2-*.tar.xz`.
+2. Regenerate one combined `release/0.15.2-rN/SHA256SUMS` over all `zig-0.15.2-rN-*.tar.xz`.
 3. Upload all archives + checksum to one GitHub release.
 ## 5) Code style guidelines
 ### Shell standards
@@ -112,7 +113,7 @@ Expected files:
 - Keep Markdown command examples copy-pastable.
 - Keep artifact naming contracts unchanged:
   - output dir: `zig-<target>-<mcpu>`
-  - archive: `zig-<version>-<target>-<mcpu>.tar.xz`
+  - archive: `zig-<version>-rN-<target>-<mcpu>.tar.xz`
 ### Error handling
 - Fail fast on invalid args and missing prerequisites.
 - Use explicit fatal helpers (`die`, `fail`).
@@ -142,4 +143,4 @@ If added later, treat them as higher-priority constraints than this file.
 ## 7) Agent notes
 - Keep diffs small and focused.
 - Never commit generated artifacts from `.out/` or `release/`.
-- Stay in `0.15.2` scope unless user requests otherwise.
+- Stay in the requested version scope.

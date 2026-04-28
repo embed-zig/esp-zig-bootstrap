@@ -1,0 +1,11 @@
+--- a/zig/src/codegen/llvm.zig
++++ b/zig/src/codegen/llvm.zig
+@@ -4839,7 +4839,7 @@
+                 bindings.LLVMInitializeXtensaTarget();
+                 bindings.LLVMInitializeXtensaTargetInfo();
+                 bindings.LLVMInitializeXtensaTargetMC();
+-                // There is no LLVMInitializeXtensaAsmPrinter function.
++                bindings.LLVMInitializeXtensaAsmPrinter();
+                 bindings.LLVMInitializeXtensaAsmParser();
+             }
+         },

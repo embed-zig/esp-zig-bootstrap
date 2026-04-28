@@ -1,0 +1,21 @@
+--- a/zig/stage1/config.zig.in
++++ b/zig/stage1/config.zig.in
+@@ -2,7 +2,7 @@
+ pub const llvm_has_m68k = false;
+ pub const llvm_has_csky = false;
+ pub const llvm_has_arc = false;
+-pub const llvm_has_xtensa = false;
++pub const llvm_has_xtensa = true;
+ pub const version: [:0]const u8 = "@RESOLVED_ZIG_VERSION@";
+ pub const semver = @import("std").SemanticVersion.parse(version) catch unreachable;
+ pub const enable_debug_extensions = false;
+--- a/zig/CMakeLists.txt
++++ b/zig/CMakeLists.txt
+@@ -748,6 +748,7 @@
+   "-Dcpu=${ZIG_TARGET_MCPU}"
+ 
+   -Denable-llvm
++  -Dllvm-has-xtensa
+   "-Dconfig_h=${ZIG_CONFIG_H_OUT}"
+ 
+   -Dno-langref

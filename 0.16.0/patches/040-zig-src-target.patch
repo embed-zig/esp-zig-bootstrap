@@ -1,0 +1,18 @@
+--- a/zig/src/target.zig
++++ b/zig/src/target.zig
+@@ -221,6 +221,7 @@
+         .x86,
+         .x86_64,
+         .xcore,
++        .xtensa,
+         .nvptx,
+         .nvptx64,
+         .lanai,
+@@ -231,7 +232,6 @@
+ 
+         // LLVM backend exists but can produce neither assembly nor object files.
+         .csky,
+-        .xtensa,
+         => false,
+ 
+         // No LLVM backend exists.

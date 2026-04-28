@@ -1,0 +1,83 @@
+--- a/llvm/lib/Target/Xtensa/XtensaBRegFixupPass.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaBRegFixupPass.cpp
+@@ -94,6 +94,7 @@
+   unsigned Opcode = MI->getOpcode();
+ 
+   switch (Opcode) {
++  case Xtensa::MOVBA4_P2:
+   case Xtensa::MOVBA2_P2:
+   case Xtensa::MOVBA_P2: {
+ 
+@@ -108,6 +109,10 @@
+     case Xtensa::MOVBA2_P2:
+       RegBase = Xtensa::B0_B1;
+       Arity = 2;
++      break;
++    case Xtensa::MOVBA4_P2:
++      RegBase = Xtensa::B0_B1_B2_B3;
++      Arity = 4;
+       break;
+     default:
+       llvm_unreachable("Unknown MOVBA opcode");
+@@ -124,34 +129,42 @@
+       WSR       BREG, Dst2
+       */
+     // TODO: Mask SRC, e.g. by EXTUI
+-    MachineOperand Breg = MI->getOperand(0);
+-    MachineOperand Dst1 = MI->getOperand(1);
+-    MachineOperand Dst2 = MI->getOperand(2);
+-    MachineOperand Src = MI->getOperand(3);
++    Register Breg = MI->getOperand(0).getReg();
++    Register Dst1 = MI->getOperand(1).getReg();
++    Register Dst2 = MI->getOperand(2).getReg();
++    Register Src = MI->getOperand(3).getReg();
+     DebugLoc DL = MI->getDebugLoc();
+-    unsigned RegNo = Breg.getReg().id() - RegBase;
++    unsigned RegNo = Breg.id() - RegBase;
+ 
+     int64_t BaseMask = (1 << Arity) - 1;
+     int64_t Mask = 0xffff & (~(BaseMask << (RegNo * Arity)));
+ 
+-    MachineInstrBuilder MIB = BuildMI(MBB, MI, DL, TII.get(Xtensa::RSR)).add(Dst1).addReg(Xtensa::BREG);
+-
+-    TII.buildLoadImmediate(MBB, MI, Dst2.getReg(), Mask);
+-
+-    BuildMI(MBB, MI, DL, TII.get(Xtensa::AND)).add(Dst2).add(Dst2).add(Dst1);
++    [[maybe_unused]] MachineInstrBuilder MIB =
++        BuildMI(MBB, MI, DL, TII.get(Xtensa::RSR), Dst1).addReg(Xtensa::BREG);
++
++    TII.buildLoadImmediate(MBB, MI, Dst2, Mask);
++
++    BuildMI(MBB, MI, DL, TII.get(Xtensa::AND), Dst2)
++        .addReg(Dst2)
++        .addReg(Dst1);
+ 
+     if (RegNo > 0) {
+       BuildMI(MBB, MI, DL, TII.get(Xtensa::SLLI))
+-          .add(Dst1)
+-          .add(Src)
+-          .addImm(RegNo);
++          .addReg(Dst1)
++          .addReg(Src)
++          .addImm(RegNo * Arity);
+     } else {
+-      Dst1.setReg(Src.getReg());
+-    }
+-
+-    BuildMI(MBB, MI, DL, TII.get(Xtensa::OR)).add(Dst2).add(Dst2).add(Dst1);
+-
+-    BuildMI(MBB, MI, DL, TII.get(Xtensa::WSR)).addReg(Xtensa::BREG).add(Dst2);
++      Dst1 = Src;
++    }
++
++    BuildMI(MBB, MI, DL, TII.get(Xtensa::OR), Dst2)
++        .addReg(Dst2)
++        .addReg(Dst1);
++
++    BuildMI(MBB, MI, DL, TII.get(Xtensa::WSR))
++        .addReg(Xtensa::BREG, RegState::Define)
++        .addReg(Dst2)
++        .addDef(Breg, RegState::Implicit);
+ 
+     LLVM_DEBUG(dbgs() << " Fixed MOVBA_P2: " << *MIB);
+     MBB.erase_instr(MI);
