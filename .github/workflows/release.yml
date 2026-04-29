@@ -1,0 +1,223 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "*.*.*-r*"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    if: github.event.deleted == false
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      build_number: ${{ steps.meta.outputs.build_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^([0-9]+[.][0-9]+[.][0-9]+)-r([0-9]+)$ ]]; then
+            printf '::error::Release tags must match <version>-rN, for example 0.16.0-r1\n'
+            exit 1
+          fi
+
+          version="${BASH_REMATCH[1]}"
+          build_number="${BASH_REMATCH[2]}"
+
+          if [[ ! -d "$version" ]]; then
+            printf '::error::Version directory %s does not exist\n' "$version"
+            exit 1
+          fi
+
+          {
+            printf 'tag=%s\n' "$tag"
+            printf 'version=%s\n' "$version"
+            printf 'build_number=%s\n' "$build_number"
+          } >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-macos-none
+            mcpu: baseline
+          - target: x86_64-macos-none
+            mcpu: baseline
+          - target: x86_64-linux-gnu
+            mcpu: baseline
+          - target: aarch64-linux-gnu
+            mcpu: baseline
+          - target: x86_64-windows-gnu
+            mcpu: baseline
+          - target: aarch64-windows-gnu
+            mcpu: baseline
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache downloaded sources
+        uses: actions/cache@v4
+        with:
+          path: ${{ needs.prepare.outputs.version }}/.downloads
+          key: downloads-${{ runner.os }}-${{ needs.prepare.outputs.version }}-${{ hashFiles('**/llvm-project', '**/zig-bootstrap') }}
+          restore-keys: downloads-${{ runner.os }}-${{ needs.prepare.outputs.version }}-
+
+      - name: Build Zig
+        id: build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./bootstrap.sh "${{ needs.prepare.outputs.version }}" "${{ matrix.target }}" "${{ matrix.mcpu }}"
+
+      - name: Package artifact
+        id: package
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./release.sh "${{ needs.prepare.outputs.version }}" "${{ matrix.target }}" "${{ matrix.mcpu }}" \
+            --build-number "${{ needs.prepare.outputs.build_number }}"
+
+      - name: Upload packaged artifact
+        if: steps.build.outcome == 'success' && steps.package.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: zig-${{ needs.prepare.outputs.tag }}-${{ matrix.target }}-${{ matrix.mcpu }}
+          path: release/${{ needs.prepare.outputs.tag }}/zig-${{ needs.prepare.outputs.tag }}-${{ matrix.target }}-${{ matrix.mcpu }}.tar.xz
+          if-no-files-found: error
+
+      - name: Report skipped target
+        if: steps.build.outcome != 'success' || steps.package.outcome == 'failure'
+        shell: bash
+        run: |
+          printf '::warning::Skipping %s/%s because build or packaging failed\n' \
+            "${{ matrix.target }}" "${{ matrix.mcpu }}"
+
+  release:
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-24.04
+    env:
+      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Find previous release tag
+        id: previous-tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current="${{ needs.prepare.outputs.tag }}"
+          previous="$(
+            git tag --list '*.*.*-r*' --sort=-v:refname |
+              awk -v current="$current" '
+                $0 == current { seen = 1; next }
+                seen { print; exit }
+              '
+          )"
+
+          printf 'base_ref=%s\n' "$previous" >>"$GITHUB_OUTPUT"
+
+      - name: Validate Copilot release notes inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$COPILOT_GITHUB_TOKEN" ]]; then
+            printf '::error::COPILOT_GITHUB_TOKEN secret is required for release notes\n'
+            exit 1
+          fi
+
+          if [[ -z "${{ steps.previous-tag.outputs.base_ref }}" ]]; then
+            printf '::error::Previous <version>-rN tag is required for Copilot release notes base-ref\n'
+            exit 1
+          fi
+
+      - name: Generate Copilot release notes
+        id: copilot-notes
+        uses: github/copilot-release-notes@main
+        with:
+          base-ref: ${{ steps.previous-tag.outputs.base_ref }}
+          head-ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Prepare release payload
+        env:
+          COPILOT_RELEASE_NOTES: ${{ steps.copilot-notes.outputs.release-notes }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+          artifacts=(dist/*.tar.xz)
+          if [[ ${#artifacts[@]} -eq 0 ]]; then
+            printf '::error::No release artifacts were downloaded\n'
+            exit 1
+          fi
+
+          (
+            cd dist
+            sha256sum *.tar.xz >SHA256SUMS
+          )
+
+          if [[ -z "$COPILOT_RELEASE_NOTES" ]]; then
+            printf '::error::Copilot release notes output is empty\n'
+            exit 1
+          fi
+
+          {
+            printf 'Automated release for `%s`.\n\n' "${{ needs.prepare.outputs.tag }}"
+            printf 'Source commit: `%s`\n\n' "$GITHUB_SHA"
+            printf '## Changes\n\n'
+            printf '%s\n' "$COPILOT_RELEASE_NOTES"
+            printf '\n\n## Artifacts\n\n'
+            for artifact in "${artifacts[@]}"; do
+              printf -- '- `%s`\n' "$(basename "$artifact")"
+            done
+          } >dist/RELEASE_NOTES.md
+
+      - name: Replace GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ needs.prepare.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release delete "$tag" --yes
+          fi
+
+          gh release create "$tag" \
+            dist/*.tar.xz \
+            dist/SHA256SUMS \
+            --title "$tag" \
+            --notes-file dist/RELEASE_NOTES.md

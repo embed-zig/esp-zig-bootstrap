@@ -4,7 +4,7 @@ Current product scope is Zig bootstrap assets/scripts for version-scoped Zig
 bootstrap directories such as `0.15.2/` and `0.16.0/`.
 ## 1) Repository scope
 - Scripts: `bootstrap.sh`, `release.sh`, `smoke_test.sh`
-- Docs: `README.md`, `RELEASE.md`
+- Docs: `README.md`
 - Assets: `<version>/llvm-project`, `<version>/zig-bootstrap`, `<version>/patches/`
 - Gitignored local outputs: `.out/`, `release/`, `<version>/.build-*`, `<version>/.downloads/`, `<version>/.cache/`
 - Do not introduce new version folders unless explicitly requested.
@@ -88,9 +88,9 @@ Expected files:
 ./release.sh 0.15.2 aarch64-macos-none baseline --build-number 1 --publish
 ```
 ### Multi-target release workflow
-1. Run `release.sh` once per target.
-2. Regenerate one combined `release/0.15.2-rN/SHA256SUMS` over all `zig-0.15.2-rN-*.tar.xz`.
-3. Upload all archives + checksum to one GitHub release.
+Push a `<version>-rN` tag to run the GitHub Actions release workflow. The
+workflow builds the target matrix and publishes only successfully built
+artifacts.
 ## 5) Code style guidelines
 ### Shell standards
 - Use `#!/usr/bin/env bash`.
@@ -130,8 +130,8 @@ Expected files:
 3. one focused scenario command related to your change
 4. `./release.sh ...` if packaging/release behavior changed
 ### Documentation consistency
-- Update `README.md` when CLI behavior/path contracts change.
-- Update `RELEASE.md` when release flow or prerequisites change.
+- Update `README.md` when CLI behavior, path contracts, release flow, or
+  prerequisites change.
 - Ensure docs match actual script behavior.
 ## 6) Cursor/Copilot rule files
 Checked paths:

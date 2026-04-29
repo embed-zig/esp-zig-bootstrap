@@ -15,7 +15,7 @@ Examples:
 Behavior:
   1) Package .out/zig-<target>-<mcpu> into release/<version-rN>/zig-<version-rN>-<target>-<mcpu>.tar.xz
   2) Generate/refresh release/<version-rN>/SHA256SUMS
-  3) (optional) Publish via gh release create v<version-rN>
+  3) (optional) Publish via gh release create <version-rN>
 EOF
 }
 
@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$BUILD_NUMBER" ]]; then
-	die "Error: --build-number is required; releases must use v<version>-rN tags"
+	die "Error: --build-number is required; releases must use <version>-rN tags"
 fi
 
 VERSION_LABEL="${VERSION}-r${BUILD_NUMBER}"
@@ -92,7 +92,7 @@ printf '  - %s\n' "$CHECKSUM_PATH"
 if [[ "$PUBLISH" == true ]]; then
 	command -v gh >/dev/null 2>&1 || die "Error: gh CLI is required for --publish"
 
-	TAG="v${VERSION_LABEL}"
+	TAG="$VERSION_LABEL"
 	printf 'Publishing release %s ...\n' "$TAG"
 	gh release create "$TAG" "$ARTIFACT_PATH" "$CHECKSUM_PATH" \
 		--title "$TAG" \
