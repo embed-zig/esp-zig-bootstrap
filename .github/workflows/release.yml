@@ -21,6 +21,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
       build_number: ${{ steps.meta.outputs.build_number }}
+      sources_hash: ${{ steps.meta.outputs.sources_hash }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,10 +44,17 @@ jobs:
             exit 1
           fi
 
+          sources_hash="$(
+            sha256sum "$version/llvm-project" "$version/zig-bootstrap" |
+              sha256sum |
+              awk '{ print $1 }'
+          )"
+
           {
             printf 'tag=%s\n' "$tag"
             printf 'version=%s\n' "$version"
             printf 'build_number=%s\n' "$build_number"
+            printf 'sources_hash=%s\n' "$sources_hash"
           } >>"$GITHUB_OUTPUT"
 
   build:
@@ -56,17 +64,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: aarch64-macos-none
-            mcpu: baseline
-          - target: x86_64-macos-none
-            mcpu: baseline
           - target: x86_64-linux-gnu
-            mcpu: baseline
-          - target: aarch64-linux-gnu
-            mcpu: baseline
-          - target: x86_64-windows-gnu
-            mcpu: baseline
-          - target: aarch64-windows-gnu
             mcpu: baseline
     steps:
       - uses: actions/checkout@v4
@@ -75,8 +73,32 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ needs.prepare.outputs.version }}/.downloads
-          key: downloads-${{ runner.os }}-${{ needs.prepare.outputs.version }}-${{ hashFiles('**/llvm-project', '**/zig-bootstrap') }}
+          key: downloads-${{ runner.os }}-${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.sources_hash }}
           restore-keys: downloads-${{ runner.os }}-${{ needs.prepare.outputs.version }}-
+
+      - name: Install Mach-O compact unwind header
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          append_include_path() {
+            local name="$1"
+            local current="${!name:-}"
+            if [[ -n "$current" ]]; then
+              printf '%s=%s:%s\n' "$name" "$include_dir" "$current" >>"$GITHUB_ENV"
+            else
+              printf '%s=%s\n' "$name" "$include_dir" >>"$GITHUB_ENV"
+            fi
+          }
+
+          include_dir="$RUNNER_TEMP/mach-o-headers"
+          mkdir -p "$include_dir/mach-o"
+          curl -fsSL \
+            https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-21.1.3/libunwind/include/mach-o/compact_unwind_encoding.h \
+            -o "$include_dir/mach-o/compact_unwind_encoding.h"
+          append_include_path CPATH
+          append_include_path C_INCLUDE_PATH
+          append_include_path CPLUS_INCLUDE_PATH
 
       - name: Build Zig
         id: build
