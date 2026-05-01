@@ -69,11 +69,11 @@ See the version-specific regression README for the case list and usage details.
 
 ## Release
 
-`release.sh` requires a build number so all releases use `<version>-rN` tags.
-Passing `--build-number 1` produces release assets under `release/<version>-r1/`
-and uses artifact names such as `zig-<version>-r1-<target>-<mcpu>.tar.xz`.
+`release.sh` requires a build number so all releases use `v<version>-rN` tags.
+Passing `--build-number 1` produces release assets under `release/v<version>-r1/`
+and uses artifact names such as `zig-v<version>-r1-<target>-<mcpu>.tar.xz`.
 
-CI releases are tag-driven. Pushing a tag such as `0.16.0-r1` builds the
+CI releases are tag-driven. Pushing a tag such as `v0.16.0-r1` builds the
 matching version directory and publishes a GitHub Release with the same tag.
 
 The workflow runs on `ubuntu-24.04` and uses a target matrix, so one tag can
@@ -83,14 +83,14 @@ artifacts.
 
 Release notes are generated with `github/copilot-release-notes`. The repository
 must have a `COPILOT_GITHUB_TOKEN` secret with `Copilot Requests: Read`
-permission, and the tag must have a previous `<version>-rN` tag to use as the
+permission, and the tag must have a previous `v<version>-rN` tag to use as the
 release notes base ref.
 
 To refresh an existing release, delete and recreate the tag:
 
 ```bash
-git tag -d 0.16.0-r1
-git push origin :refs/tags/0.16.0-r1
-git tag 0.16.0-r1
-git push --force origin 0.16.0-r1
+git tag -d v0.16.0-r1
+git push origin :refs/tags/v0.16.0-r1
+git tag v0.16.0-r1
+git push --force origin v0.16.0-r1
 ```

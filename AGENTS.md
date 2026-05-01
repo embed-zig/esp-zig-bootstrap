@@ -88,7 +88,7 @@ Expected files:
 ./release.sh 0.15.2 aarch64-macos-none baseline --build-number 1 --publish
 ```
 ### Multi-target release workflow
-Push a `<version>-rN` tag to run the GitHub Actions release workflow. The
+Push a `v<version>-rN` tag to run the GitHub Actions release workflow. The
 workflow builds the target matrix and publishes only successfully built
 artifacts.
 ## 5) Code style guidelines
@@ -113,7 +113,7 @@ artifacts.
 - Keep Markdown command examples copy-pastable.
 - Keep artifact naming contracts unchanged:
   - output dir: `zig-<target>-<mcpu>`
-  - archive: `zig-<version>-rN-<target>-<mcpu>.tar.xz`
+  - archive: `zig-v<version>-rN-<target>-<mcpu>.tar.xz`
 ### Error handling
 - Fail fast on invalid args and missing prerequisites.
 - Use explicit fatal helpers (`die`, `fail`).

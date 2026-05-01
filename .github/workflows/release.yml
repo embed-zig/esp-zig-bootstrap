@@ -3,7 +3,7 @@ name: release
 on:
   push:
     tags:
-      - "*.*.*-r*"
+      - "v*.*.*-r*"
 
 permissions:
   contents: write
@@ -31,8 +31,8 @@ jobs:
           set -euo pipefail
 
           tag="${GITHUB_REF_NAME}"
-          if [[ ! "$tag" =~ ^([0-9]+[.][0-9]+[.][0-9]+)-r([0-9]+)$ ]]; then
-            printf '::error::Release tags must match <version>-rN, for example 0.16.0-r1\n'
+          if [[ ! "$tag" =~ ^v([0-9]+[.][0-9]+[.][0-9]+)-r([0-9]+)$ ]]; then
+            printf '::error::Release tags must match v<version>-rN, for example v0.16.0-r1\n'
             exit 1
           fi
 
@@ -159,7 +159,7 @@ jobs:
 
           current="${{ needs.prepare.outputs.tag }}"
           previous="$(
-            git tag --list '*.*.*-r*' --sort=-v:refname |
+            git tag --list 'v*.*.*-r*' --sort=-v:refname |
               awk -v current="$current" '
                 $0 == current { seen = 1; next }
                 seen { print; exit }
@@ -179,7 +179,7 @@ jobs:
           fi
 
           if [[ -z "${{ steps.previous-tag.outputs.base_ref }}" ]]; then
-            printf '::error::Previous <version>-rN tag is required for Copilot release notes base-ref\n'
+            printf '::error::Previous v<version>-rN tag is required for Copilot release notes base-ref\n'
             exit 1
           fi
 
