@@ -7,7 +7,10 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
+  models: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
   group: release-${{ github.ref_name }}
@@ -23,7 +26,7 @@ jobs:
       build_number: ${{ steps.meta.outputs.build_number }}
       sources_hash: ${{ steps.meta.outputs.sources_hash }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - id: meta
         shell: bash
@@ -67,7 +70,7 @@ jobs:
           - target: x86_64-linux-gnu
             mcpu: baseline
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Cache downloaded sources
         uses: actions/cache@v4
@@ -138,10 +141,8 @@ jobs:
       - prepare
       - build
     runs-on: ubuntu-24.04
-    env:
-      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -168,31 +169,149 @@ jobs:
 
           printf 'base_ref=%s\n' "$previous" >>"$GITHUB_OUTPUT"
 
-      - name: Validate Copilot release notes inputs
+      - name: Validate release notes inputs
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ -z "$COPILOT_GITHUB_TOKEN" ]]; then
-            printf '::error::COPILOT_GITHUB_TOKEN secret is required for release notes\n'
-            exit 1
-          fi
-
           if [[ -z "${{ steps.previous-tag.outputs.base_ref }}" ]]; then
-            printf '::error::Previous v<version>-rN tag is required for Copilot release notes base-ref\n'
+            printf '::error::Previous v<version>-rN tag is required for release notes base-ref\n'
             exit 1
           fi
 
-      - name: Generate Copilot release notes
-        id: copilot-notes
-        uses: github/copilot-release-notes@main
+      - name: Prepare grouped release note inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_ref="${{ steps.previous-tag.outputs.base_ref }}"
+          head_ref="${{ needs.prepare.outputs.tag }}"
+          context_dir="dist/release-context"
+          mkdir -p "$context_dir"
+
+          git log --no-merges --format='- %s (%h)' "$base_ref..$head_ref" >"$context_dir/commits.md"
+          git diff --name-status "$base_ref..$head_ref" >"$context_dir/files.txt"
+          git diff --stat "$base_ref..$head_ref" >"$context_dir/diff-stat.txt"
+
+          write_group_prompt() {
+            local group="$1"
+            local title="$2"
+            shift 2
+            local prompt="$context_dir/${group}.prompt.md"
+            local diff_file="$context_dir/${group}.diff"
+
+            git diff --unified=20 "$base_ref..$head_ref" -- "$@" >"$diff_file" || true
+
+            {
+              printf 'You are preparing one section of release notes for esp-zig-bootstrap.\n'
+              printf 'Summarize only user-relevant changes in this group. Ignore noisy mechanical patch context unless it changes behavior.\n'
+              printf 'Use concise markdown bullets. Do not mention files that did not change.\n\n'
+              printf 'Release range: `%s..%s`\n' "$base_ref" "$head_ref"
+              printf 'Group: %s\n\n' "$title"
+              printf 'Changed files in this group:\n'
+              git diff --name-status "$base_ref..$head_ref" -- "$@" || true
+              printf '\nOverall commit log:\n'
+              cat "$context_dir/commits.md"
+              printf '\nDiff for this group, truncated if necessary:\n'
+              python3 -c 'import pathlib, sys; data = pathlib.Path(sys.argv[1]).read_text(errors="replace"); limit = 120000; sys.stdout.write(data if len(data) <= limit else data[:limit] + "\n\n[diff truncated]\n")' "$diff_file"
+            } >"$prompt"
+          }
+
+          write_group_prompt ci-release "CI and release automation" \
+            .github/workflows/release.yml release.sh
+          write_group_prompt docs "Documentation" \
+            README.md AGENTS.md RELEASE.md 0.16.0/README.md 0.16.0/regression/README.md
+          write_group_prompt version-inputs "Version inputs and bootstrap support" \
+            .gitignore bootstrap.sh 0.16.0/.gitignore 0.16.0/llvm-project 0.16.0/zig-bootstrap
+          write_group_prompt xtensa-patches "Xtensa downstream patch set" \
+            0.16.0/patches
+          write_group_prompt regression-tests "Xtensa regression tests" \
+            0.16.0/regression/run.sh 0.16.0/regression/cases
+
+      - name: Summarize CI and release changes
+        id: notes-ci-release
+        uses: actions/ai-inference@v1
         with:
-          base-ref: ${{ steps.previous-tag.outputs.base_ref }}
-          head-ref: ${{ needs.prepare.outputs.tag }}
+          prompt-file: dist/release-context/ci-release.prompt.md
+          model: openai/gpt-4o
+          max-completion-tokens: 700
+
+      - name: Summarize documentation changes
+        id: notes-docs
+        uses: actions/ai-inference@v1
+        with:
+          prompt-file: dist/release-context/docs.prompt.md
+          model: openai/gpt-4o
+          max-completion-tokens: 700
+
+      - name: Summarize version input changes
+        id: notes-version-inputs
+        uses: actions/ai-inference@v1
+        with:
+          prompt-file: dist/release-context/version-inputs.prompt.md
+          model: openai/gpt-4o
+          max-completion-tokens: 700
+
+      - name: Summarize Xtensa patch changes
+        id: notes-xtensa-patches
+        uses: actions/ai-inference@v1
+        with:
+          prompt-file: dist/release-context/xtensa-patches.prompt.md
+          model: openai/gpt-4o
+          max-completion-tokens: 900
+
+      - name: Summarize regression test changes
+        id: notes-regression-tests
+        uses: actions/ai-inference@v1
+        with:
+          prompt-file: dist/release-context/regression-tests.prompt.md
+          model: openai/gpt-4o
+          max-completion-tokens: 700
+
+      - name: Prepare final release notes prompt
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            printf 'You are writing final release notes for esp-zig-bootstrap.\n'
+            printf 'Turn the grouped summaries into concise user-facing markdown.\n'
+            printf 'Keep meaningful technical details, but remove duplication and internal workflow noise.\n'
+            printf 'Use these sections exactly: "## Highlights", "## Changes", "## Notes".\n'
+            printf 'Do not include artifacts; they are appended separately.\n\n'
+            printf 'Release: `%s`\n' "${{ needs.prepare.outputs.tag }}"
+            printf 'Source commit: `%s`\n\n' "$GITHUB_SHA"
+            printf 'Commit log:\n'
+            cat dist/release-context/commits.md
+            printf '\nChanged files:\n'
+            cat dist/release-context/files.txt
+            printf '\nDiff stat:\n'
+            cat dist/release-context/diff-stat.txt
+            printf '\n\nGrouped AI summaries:\n\n'
+            printf '### CI and release automation\n'
+            cat "${{ steps.notes-ci-release.outputs.response-file }}"
+            printf '\n\n### Documentation\n'
+            cat "${{ steps.notes-docs.outputs.response-file }}"
+            printf '\n\n### Version inputs and bootstrap support\n'
+            cat "${{ steps.notes-version-inputs.outputs.response-file }}"
+            printf '\n\n### Xtensa downstream patch set\n'
+            cat "${{ steps.notes-xtensa-patches.outputs.response-file }}"
+            printf '\n\n### Xtensa regression tests\n'
+            cat "${{ steps.notes-regression-tests.outputs.response-file }}"
+            printf '\n'
+          } >dist/release-context/final.prompt.md
+
+      - name: Generate final release notes
+        id: final-notes
+        uses: actions/ai-inference@v1
+        with:
+          prompt-file: dist/release-context/final.prompt.md
+          model: openai/gpt-4o
+          max-completion-tokens: 1400
 
       - name: Prepare release payload
         env:
-          COPILOT_RELEASE_NOTES: ${{ steps.copilot-notes.outputs.release-notes }}
+          FINAL_RELEASE_NOTES_FILE: ${{ steps.final-notes.outputs.response-file }}
         shell: bash
         run: |
           set -euo pipefail
@@ -209,16 +328,15 @@ jobs:
             sha256sum *.tar.xz >SHA256SUMS
           )
 
-          if [[ -z "$COPILOT_RELEASE_NOTES" ]]; then
-            printf '::error::Copilot release notes output is empty\n'
+          if [[ ! -s "$FINAL_RELEASE_NOTES_FILE" ]]; then
+            printf '::error::AI release notes output is empty\n'
             exit 1
           fi
 
           {
             printf 'Automated release for `%s`.\n\n' "${{ needs.prepare.outputs.tag }}"
             printf 'Source commit: `%s`\n\n' "$GITHUB_SHA"
-            printf '## Changes\n\n'
-            printf '%s\n' "$COPILOT_RELEASE_NOTES"
+            cat "$FINAL_RELEASE_NOTES_FILE"
             printf '\n\n## Artifacts\n\n'
             for artifact in "${artifacts[@]}"; do
               printf -- '- `%s`\n' "$(basename "$artifact")"
