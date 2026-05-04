@@ -11,6 +11,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RELEASE_NOTES_MODEL: openai/gpt-4o-mini
 
 concurrency:
   group: release-${{ github.ref_name }}
@@ -68,6 +69,16 @@ jobs:
       matrix:
         include:
           - target: x86_64-linux-gnu
+            mcpu: baseline
+          - target: aarch64-linux-gnu
+            mcpu: baseline
+          - target: x86_64-macos-none
+            mcpu: baseline
+          - target: aarch64-macos-none
+            mcpu: baseline
+          - target: x86_64-windows-gnu
+            mcpu: baseline
+          - target: aarch64-windows-gnu
             mcpu: baseline
     steps:
       - uses: actions/checkout@v6
@@ -205,7 +216,16 @@ jobs:
             {
               printf 'You are preparing one section of release notes for esp-zig-bootstrap.\n'
               printf 'Summarize only user-relevant changes in this group. Ignore noisy mechanical patch context unless it changes behavior.\n'
-              printf 'Use concise markdown bullets. Do not mention files that did not change.\n\n'
+              printf 'Use concise markdown bullets. Do not mention files that did not change.\n'
+              printf 'Do not wrap the response in a markdown code fence.\n'
+              if [[ "$group" == "regression-tests" ]]; then
+                printf 'Regression tests are supporting validation, not the main product. Summarize test coverage areas in at most three bullets; do not list individual test case names.\n'
+              elif [[ "$group" == "xtensa-patches" ]]; then
+                printf 'Focus on shipped Xtensa compiler/toolchain behavior, not patch file mechanics.\n'
+              elif [[ "$group" == "ci-release" ]]; then
+                printf 'Focus on release automation behavior visible to maintainers and users.\n'
+              fi
+              printf '\n'
               printf 'Release range: `%s..%s`\n' "$base_ref" "$head_ref"
               printf 'Group: %s\n\n' "$title"
               printf 'Changed files in this group:\n'
@@ -233,40 +253,40 @@ jobs:
         uses: actions/ai-inference@v1
         with:
           prompt-file: dist/release-context/ci-release.prompt.md
-          model: openai/gpt-4o
-          max-completion-tokens: 700
+          model: ${{ env.RELEASE_NOTES_MODEL }}
+          max-tokens: 700
 
       - name: Summarize documentation changes
         id: notes-docs
         uses: actions/ai-inference@v1
         with:
           prompt-file: dist/release-context/docs.prompt.md
-          model: openai/gpt-4o
-          max-completion-tokens: 700
+          model: ${{ env.RELEASE_NOTES_MODEL }}
+          max-tokens: 700
 
       - name: Summarize version input changes
         id: notes-version-inputs
         uses: actions/ai-inference@v1
         with:
           prompt-file: dist/release-context/version-inputs.prompt.md
-          model: openai/gpt-4o
-          max-completion-tokens: 700
+          model: ${{ env.RELEASE_NOTES_MODEL }}
+          max-tokens: 700
 
       - name: Summarize Xtensa patch changes
         id: notes-xtensa-patches
         uses: actions/ai-inference@v1
         with:
           prompt-file: dist/release-context/xtensa-patches.prompt.md
-          model: openai/gpt-4o
-          max-completion-tokens: 900
+          model: ${{ env.RELEASE_NOTES_MODEL }}
+          max-tokens: 900
 
       - name: Summarize regression test changes
         id: notes-regression-tests
         uses: actions/ai-inference@v1
         with:
           prompt-file: dist/release-context/regression-tests.prompt.md
-          model: openai/gpt-4o
-          max-completion-tokens: 700
+          model: ${{ env.RELEASE_NOTES_MODEL }}
+          max-tokens: 700
 
       - name: Prepare final release notes prompt
         shell: bash
@@ -275,9 +295,13 @@ jobs:
 
           {
             printf 'You are writing final release notes for esp-zig-bootstrap.\n'
+            printf 'This is a Zig %s toolchain release with downstream ESP Xtensa support.\n' "${{ needs.prepare.outputs.version }}"
             printf 'Turn the grouped summaries into concise user-facing markdown.\n'
             printf 'Keep meaningful technical details, but remove duplication and internal workflow noise.\n'
             printf 'Use these sections exactly: "## Highlights", "## Changes", "## Notes".\n'
+            printf 'The first non-empty line must be "## Highlights". Do not wrap the response in a markdown code fence.\n'
+            printf 'Prioritize, in order: shipped toolchain/version support, Xtensa compiler/backend changes, release automation, validation coverage.\n'
+            printf 'Mention regression tests only as validation coverage; do not list individual regression test files or case names.\n'
             printf 'Do not include artifacts; they are appended separately.\n\n'
             printf 'Release: `%s`\n' "${{ needs.prepare.outputs.tag }}"
             printf 'Source commit: `%s`\n\n' "$GITHUB_SHA"
@@ -306,8 +330,8 @@ jobs:
         uses: actions/ai-inference@v1
         with:
           prompt-file: dist/release-context/final.prompt.md
-          model: openai/gpt-4o
-          max-completion-tokens: 1400
+          model: ${{ env.RELEASE_NOTES_MODEL }}
+          max-tokens: 1400
 
       - name: Prepare release payload
         env:
@@ -328,7 +352,21 @@ jobs:
             sha256sum *.tar.xz >SHA256SUMS
           )
 
-          if [[ ! -s "$FINAL_RELEASE_NOTES_FILE" ]]; then
+          cleaned_notes="dist/AI_RELEASE_NOTES.md"
+          python3 - "$FINAL_RELEASE_NOTES_FILE" "$cleaned_notes" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          source = pathlib.Path(sys.argv[1])
+          target = pathlib.Path(sys.argv[2])
+          notes = source.read_text(errors="replace").strip()
+          notes = re.sub(r"\A```(?:markdown|md)?\s*\n", "", notes, flags=re.IGNORECASE)
+          notes = re.sub(r"\n```\s*\Z", "", notes).strip()
+          target.write_text(notes + "\n")
+          PY
+
+          if [[ ! -s "$cleaned_notes" ]]; then
             printf '::error::AI release notes output is empty\n'
             exit 1
           fi
@@ -336,7 +374,7 @@ jobs:
           {
             printf 'Automated release for `%s`.\n\n' "${{ needs.prepare.outputs.tag }}"
             printf 'Source commit: `%s`\n\n' "$GITHUB_SHA"
-            cat "$FINAL_RELEASE_NOTES_FILE"
+            cat "$cleaned_notes"
             printf '\n\n## Artifacts\n\n'
             for artifact in "${artifacts[@]}"; do
               printf -- '- `%s`\n' "$(basename "$artifact")"

@@ -84,7 +84,9 @@ artifacts.
 Release notes are generated with GitHub Models through `actions/ai-inference`.
 The workflow summarizes grouped file diffs first, then asks the model to combine
 those summaries into final release notes. The tag must have a previous
-`v<version>-rN` tag to use as the release notes base ref.
+`v<version>-rN` tag to use as the release notes base ref. The repository or
+organization must also allow GitHub Models access for the selected release notes
+model, currently `openai/gpt-4o-mini`.
 
 To refresh an existing release, delete and recreate the tag:
 
