@@ -28,6 +28,12 @@ under `0.16.0/patches/`.
 - `cases/xtensa-bool-shuffle.zig`: covers `090`, including reverse self-shuffles
 - `cases/xtensa-bool-v8-bitcast.zig`: covers `090`
 - `cases/xtensa-bool-vselect.zig`: covers `090`
+- `cases/xtensa-scalar-bool-return.zig`: covers `126`, including scalar `bool` returns from internal helpers
+- `cases/xtensa-scalar-bool-return-inverted.zig`: covers `126`, including inverted scalar `bool` returns from internal helpers
+- `cases/xtensa-scalar-bool-export-return.zig`: covers `126`, including exported scalar `bool` returns
+- `cases/xtensa-scalar-bool-not-return.zig`: covers `126`, including explicit scalar `bool` negation returns
+- `cases/xtensa-scalar-bool-call.zig`: covers `126`, including scalar `bool` arguments to internal helpers
+- `cases/xtensa-scalar-bool-call-inverted.zig`: covers `126`, including inverted scalar `bool` arguments to internal helpers
 - `cases/xtensa-frame-scavenge.zig`: covers `115`, `120`
 - `cases/xtensa-frame-narrow-offsets.zig`: defensive narrow-offset scavenging coverage
 - `cases/xtensa-l32r-const-island.zig`: covers `125`, including Debug-only large mixed-width stack accesses that used to overflow Xtensa `l32r` constant-island reach

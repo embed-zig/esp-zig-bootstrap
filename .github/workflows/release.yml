@@ -197,12 +197,31 @@ jobs:
 
           base_ref="${{ steps.previous-tag.outputs.base_ref }}"
           head_ref="${{ needs.prepare.outputs.tag }}"
+          version_dir="${{ needs.prepare.outputs.version }}"
           context_dir="dist/release-context"
           mkdir -p "$context_dir"
 
+          release_note_paths=(
+            .github/workflows/release.yml
+            release.sh
+            README.md
+            AGENTS.md
+            RELEASE.md
+            .gitignore
+            bootstrap.sh
+            "$version_dir/README.md"
+            "$version_dir/regression/README.md"
+            "$version_dir/.gitignore"
+            "$version_dir/llvm-project"
+            "$version_dir/zig-bootstrap"
+            "$version_dir/patches"
+            "$version_dir/regression/run.sh"
+            "$version_dir/regression/cases"
+          )
+
           git log --no-merges --format='- %s (%h)' "$base_ref..$head_ref" >"$context_dir/commits.md"
-          git diff --name-status "$base_ref..$head_ref" >"$context_dir/files.txt"
-          git diff --stat "$base_ref..$head_ref" >"$context_dir/diff-stat.txt"
+          git diff --name-status "$base_ref..$head_ref" -- "${release_note_paths[@]}" >"$context_dir/files.txt"
+          git diff --stat "$base_ref..$head_ref" -- "${release_note_paths[@]}" >"$context_dir/diff-stat.txt"
 
           write_group_prompt() {
             local group="$1"
@@ -240,13 +259,13 @@ jobs:
           write_group_prompt ci-release "CI and release automation" \
             .github/workflows/release.yml release.sh
           write_group_prompt docs "Documentation" \
-            README.md AGENTS.md RELEASE.md 0.16.0/README.md 0.16.0/regression/README.md
+            README.md AGENTS.md RELEASE.md "$version_dir/README.md" "$version_dir/regression/README.md"
           write_group_prompt version-inputs "Version inputs and bootstrap support" \
-            .gitignore bootstrap.sh 0.16.0/.gitignore 0.16.0/llvm-project 0.16.0/zig-bootstrap
+            .gitignore bootstrap.sh "$version_dir/.gitignore" "$version_dir/llvm-project" "$version_dir/zig-bootstrap"
           write_group_prompt xtensa-patches "Xtensa downstream patch set" \
-            0.16.0/patches
+            "$version_dir/patches"
           write_group_prompt regression-tests "Xtensa regression tests" \
-            0.16.0/regression/run.sh 0.16.0/regression/cases
+            "$version_dir/regression/run.sh" "$version_dir/regression/cases"
 
       - name: Summarize CI and release changes
         id: notes-ci-release

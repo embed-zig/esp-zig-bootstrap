@@ -26,6 +26,12 @@ CASE_IDS=(
 	xtensa-bool-shuffle
 	xtensa-bool-v8-bitcast
 	xtensa-bool-vselect
+	xtensa-scalar-bool-return
+	xtensa-scalar-bool-return-inverted
+	xtensa-scalar-bool-export-return
+	xtensa-scalar-bool-not-return
+	xtensa-scalar-bool-call
+	xtensa-scalar-bool-call-inverted
 	xtensa-frame-scavenge
 	xtensa-frame-narrow-offsets
 	xtensa-l32r-const-island
@@ -58,6 +64,12 @@ case_exists() {
 	xtensa-bool-shuffle | \
 	xtensa-bool-v8-bitcast | \
 	xtensa-bool-vselect | \
+	xtensa-scalar-bool-return | \
+	xtensa-scalar-bool-return-inverted | \
+	xtensa-scalar-bool-export-return | \
+	xtensa-scalar-bool-not-return | \
+	xtensa-scalar-bool-call | \
+	xtensa-scalar-bool-call-inverted | \
 	xtensa-frame-scavenge | \
 	xtensa-frame-narrow-offsets | \
 	xtensa-l32r-const-island)
@@ -146,6 +158,24 @@ case_patches() {
 	xtensa-bool-vselect)
 		printf '090'
 		;;
+	xtensa-scalar-bool-return)
+		printf '126'
+		;;
+	xtensa-scalar-bool-return-inverted)
+		printf '126'
+		;;
+	xtensa-scalar-bool-export-return)
+		printf '126'
+		;;
+	xtensa-scalar-bool-not-return)
+		printf '126'
+		;;
+	xtensa-scalar-bool-call)
+		printf '126'
+		;;
+	xtensa-scalar-bool-call-inverted)
+		printf '126'
+		;;
 	xtensa-frame-scavenge)
 		printf '115,120'
 		;;
@@ -230,6 +260,24 @@ case_description() {
 		;;
 	xtensa-bool-vselect)
 		printf 'boolean vector @select lowering in Debug and optimized builds'
+		;;
+	xtensa-scalar-bool-return)
+		printf 'scalar bool return promotion for internal fastcc helpers'
+		;;
+	xtensa-scalar-bool-return-inverted)
+		printf 'inverted scalar bool return promotion for internal fastcc helpers'
+		;;
+	xtensa-scalar-bool-export-return)
+		printf 'exported scalar bool return promotion'
+		;;
+	xtensa-scalar-bool-not-return)
+		printf 'explicit scalar bool negation return promotion'
+		;;
+	xtensa-scalar-bool-call)
+		printf 'scalar bool argument promotion for internal fastcc helpers'
+		;;
+	xtensa-scalar-bool-call-inverted)
+		printf 'inverted scalar bool argument promotion for internal fastcc helpers'
 		;;
 	xtensa-frame-scavenge)
 		printf 'frame scavenging and emergency spill slot path'
