@@ -1,0 +1,12 @@
+diff --git a/clang/lib/Basic/Targets/Xtensa.h b/clang/lib/Basic/Targets/Xtensa.h
+index 1c4530e0b10e..e9a65d2e7d56 100644
+--- a/clang/lib/Basic/Targets/Xtensa.h
++++ b/clang/lib/Basic/Targets/Xtensa.h
+@@ -102,4 +102,6 @@ public:
+     return TargetInfo::XtensaABIBuiltinVaList;
+   }
+-
++
++  bool hasInt128Type() const override { return true; }
++
+   std::string_view getClobbers() const override { return ""; }

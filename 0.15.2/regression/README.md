@@ -1,7 +1,7 @@
 ## Xtensa Regression Cases
 
-This directory contains small committed Zig repros for the complex Xtensa patches
-under `0.15.2/patches/`.
+This directory contains small committed Zig, C, and C++ repros for the complex
+Xtensa patches under `0.15.2/patches/`.
 
 ### Layout
 
@@ -34,6 +34,11 @@ under `0.15.2/patches/`.
 - `cases/xtensa-scalar-bool-not-return.zig`: covers `126`, including explicit scalar `bool` negation returns
 - `cases/xtensa-scalar-bool-call.zig`: covers `126`, including scalar `bool` arguments to internal helpers
 - `cases/xtensa-scalar-bool-call-inverted.zig`: covers `126`, including inverted scalar `bool` arguments to internal helpers
+- `cases/xtensa-c-uint128.c`: covers `127`, including C `unsigned __int128` declarations and arithmetic
+- `cases/xtensa-c-int128-typedefs.c`: covers `127`, including C `__int128_t` and `__uint128_t` predefined typedefs
+- `cases/xtensa-c-int128-overflow.c`: covers `127`, including C `__int128` overflow builtins
+- `cases/xtensa-c-int128-atomic.c`: covers `127`, including C `__int128` atomic builtins
+- `cases/xtensa-cpp-uint128.cpp`: covers `127`, including C++ `unsigned __int128` declarations and arithmetic
 - `cases/xtensa-frame-scavenge.zig`: covers `115`, `120`
 - `cases/xtensa-frame-narrow-offsets.zig`: defensive narrow-offset scavenging coverage
 - `cases/xtensa-l32r-const-island.zig`: covers `125`, including Debug-only large mixed-width stack accesses that used to overflow Xtensa `l32r` constant-island reach

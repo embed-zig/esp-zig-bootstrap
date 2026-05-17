@@ -32,6 +32,11 @@ CASE_IDS=(
 	xtensa-scalar-bool-not-return
 	xtensa-scalar-bool-call
 	xtensa-scalar-bool-call-inverted
+	xtensa-c-uint128
+	xtensa-c-int128-typedefs
+	xtensa-c-int128-overflow
+	xtensa-c-int128-atomic
+	xtensa-cpp-uint128
 	xtensa-frame-scavenge
 	xtensa-frame-narrow-offsets
 	xtensa-l32r-const-island
@@ -70,6 +75,11 @@ case_exists() {
 	xtensa-scalar-bool-not-return | \
 	xtensa-scalar-bool-call | \
 	xtensa-scalar-bool-call-inverted | \
+	xtensa-c-uint128 | \
+	xtensa-c-int128-typedefs | \
+	xtensa-c-int128-overflow | \
+	xtensa-c-int128-atomic | \
+	xtensa-cpp-uint128 | \
 	xtensa-frame-scavenge | \
 	xtensa-frame-narrow-offsets | \
 	xtensa-l32r-const-island)
@@ -82,6 +92,25 @@ case_exists() {
 
 case_source() {
 	local case_id="$1"
+	local source_file="$MANIFEST_DIR/$case_id.zig"
+
+	if [[ -f "$source_file" ]]; then
+		printf '%s\n' "$source_file"
+		return 0
+	fi
+
+	source_file="$MANIFEST_DIR/$case_id.c"
+	if [[ -f "$source_file" ]]; then
+		printf '%s\n' "$source_file"
+		return 0
+	fi
+
+	source_file="$MANIFEST_DIR/$case_id.cpp"
+	if [[ -f "$source_file" ]]; then
+		printf '%s\n' "$source_file"
+		return 0
+	fi
+
 	printf '%s/%s.zig\n' "$MANIFEST_DIR" "$case_id"
 }
 
@@ -175,6 +204,21 @@ case_patches() {
 		;;
 	xtensa-scalar-bool-call-inverted)
 		printf '126'
+		;;
+	xtensa-c-uint128)
+		printf '127'
+		;;
+	xtensa-c-int128-typedefs)
+		printf '127'
+		;;
+	xtensa-c-int128-overflow)
+		printf '127'
+		;;
+	xtensa-c-int128-atomic)
+		printf '127'
+		;;
+	xtensa-cpp-uint128)
+		printf '127'
 		;;
 	xtensa-frame-scavenge)
 		printf '115,120'
@@ -278,6 +322,21 @@ case_description() {
 		;;
 	xtensa-scalar-bool-call-inverted)
 		printf 'inverted scalar bool argument promotion for internal fastcc helpers'
+		;;
+	xtensa-c-uint128)
+		printf 'C unsigned __int128 declarations and arithmetic for Xtensa'
+		;;
+	xtensa-c-int128-typedefs)
+		printf 'C __int128_t and __uint128_t predefined typedefs for Xtensa'
+		;;
+	xtensa-c-int128-overflow)
+		printf 'C __int128 overflow builtin lowering for Xtensa'
+		;;
+	xtensa-c-int128-atomic)
+		printf 'C __int128 atomic builtin lowering for Xtensa'
+		;;
+	xtensa-cpp-uint128)
+		printf 'C++ unsigned __int128 declarations and arithmetic for Xtensa'
 		;;
 	xtensa-frame-scavenge)
 		printf 'frame scavenging and emergency spill slot path'
