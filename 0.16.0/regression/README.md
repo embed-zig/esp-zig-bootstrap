@@ -34,6 +34,8 @@ Xtensa patches under `0.16.0/patches/`.
 - `cases/xtensa-scalar-bool-not-return.zig`: covers `126`, including explicit scalar `bool` negation returns
 - `cases/xtensa-scalar-bool-call.zig`: covers `126`, including scalar `bool` arguments to internal helpers
 - `cases/xtensa-scalar-bool-call-inverted.zig`: covers `126`, including inverted scalar `bool` arguments to internal helpers
+- `cases/xtensa-scalar-bool-bitwise.zig`: covers `126`, including scalar `bool` AND/OR/XOR values flowing through internal helpers
+- `cases/xtensa-selectiondag-combine-loop.ll`: covers `128`, including LLVM IR that reproduces an Xtensa ReleaseSafe SelectionDAG combine loop
 - `cases/xtensa-c-uint128.c`: covers `127`, including C `unsigned __int128` declarations and arithmetic
 - `cases/xtensa-c-int128-typedefs.c`: covers `127`, including C `__int128_t` and `__uint128_t` predefined typedefs
 - `cases/xtensa-c-int128-overflow.c`: covers `127`, including C `__int128` overflow builtins
@@ -66,6 +68,14 @@ Run one case only:
 ```bash
 ZIG=/path/to/zig \
 ./0.16.0/regression/run.sh xtensa-bool-extend-extract
+```
+
+Set a shorter per-compile timeout when checking suspected SelectionDAG loops:
+
+```bash
+XTENSA_REGRESSION_TIMEOUT_SECONDS=20 \
+ZIG=/path/to/zig \
+./0.16.0/regression/run.sh xtensa-selectiondag-combine-loop
 ```
 
 List all available cases without running compilation:

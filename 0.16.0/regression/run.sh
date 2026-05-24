@@ -3,6 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPILE_TIMEOUT_SECONDS="${XTENSA_REGRESSION_TIMEOUT_SECONDS:-120}"
 
 source "$SCRIPT_DIR/cases/manifest.sh"
 
@@ -17,6 +18,7 @@ Usage: ./0.16.0/regression/run.sh [case-id...]
 
 Environment:
   ZIG  path to the Zig executable to test
+  XTENSA_REGRESSION_TIMEOUT_SECONDS  per-compile timeout, defaults to 120
 
 Options:
   --help  show this help text
@@ -59,17 +61,44 @@ run_compile() {
 	local optimize="$3"
 	local work_dir="$4"
 	local log_file="$5"
+	local timeout_marker="$work_dir/timeout.marker"
 
 	mkdir -p "$work_dir"
+	rm -f "$timeout_marker"
 
 	(
 		cd "$work_dir"
-		"$zig_exe" build-obj \
+		exec "$zig_exe" build-obj \
 			-target xtensa-freestanding-none \
 			-mcpu esp32s3 \
 			"-O$optimize" \
 			"$source_file"
-	) >"$log_file" 2>&1
+	) >"$log_file" 2>&1 &
+	local compile_pid=$!
+
+	(
+		sleep "$COMPILE_TIMEOUT_SECONDS"
+		if kill -0 "$compile_pid" 2>/dev/null; then
+			printf 'compile timed out after %s seconds\n' "$COMPILE_TIMEOUT_SECONDS" >"$timeout_marker"
+			kill -TERM "$compile_pid" 2>/dev/null || true
+			sleep 2
+			kill -KILL "$compile_pid" 2>/dev/null || true
+		fi
+	) &
+	local watchdog_pid=$!
+
+	local compile_status=0
+	wait "$compile_pid" 2>/dev/null || compile_status=$?
+	kill "$watchdog_pid" 2>/dev/null || true
+	wait "$watchdog_pid" 2>/dev/null || true
+
+	if [[ -f "$timeout_marker" ]]; then
+		cat "$timeout_marker" >>"$log_file"
+		rm -f "$timeout_marker"
+		return 124
+	fi
+
+	return "$compile_status"
 }
 
 emit_asm() {
@@ -79,16 +108,43 @@ emit_asm() {
 	local work_dir="$4"
 	local asm_file="$5"
 	local log_file="$6"
+	local timeout_marker="$work_dir/timeout.marker"
 
+	rm -f "$timeout_marker"
 	(
 		cd "$work_dir"
-		"$zig_exe" build-obj \
+		exec "$zig_exe" build-obj \
 			-target xtensa-freestanding-none \
 			-mcpu esp32s3 \
 			"-O$optimize" \
 			-femit-asm="$asm_file" \
 			"$source_file"
-	) >>"$log_file" 2>&1
+	) >>"$log_file" 2>&1 &
+	local compile_pid=$!
+
+	(
+		sleep "$COMPILE_TIMEOUT_SECONDS"
+		if kill -0 "$compile_pid" 2>/dev/null; then
+			printf 'compile timed out after %s seconds\n' "$COMPILE_TIMEOUT_SECONDS" >"$timeout_marker"
+			kill -TERM "$compile_pid" 2>/dev/null || true
+			sleep 2
+			kill -KILL "$compile_pid" 2>/dev/null || true
+		fi
+	) &
+	local watchdog_pid=$!
+
+	local compile_status=0
+	wait "$compile_pid" 2>/dev/null || compile_status=$?
+	kill "$watchdog_pid" 2>/dev/null || true
+	wait "$watchdog_pid" 2>/dev/null || true
+
+	if [[ -f "$timeout_marker" ]]; then
+		cat "$timeout_marker" >>"$log_file"
+		rm -f "$timeout_marker"
+		return 124
+	fi
+
+	return "$compile_status"
 }
 
 verify_fixup_v4_high_group_asm() {

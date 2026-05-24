@@ -1,0 +1,30 @@
+--- a/llvm/lib/CodeGen/SelectionDAG/LegalizeIntegerTypes.cpp
++++ b/llvm/lib/CodeGen/SelectionDAG/LegalizeIntegerTypes.cpp
+@@ -1984,6 +1984,20 @@ bool DAGTypeLegalizer::PromoteIntegerOperand(SDNode *N, unsigned OpNo) {
+   case ISD::VSELECT:
+   case ISD::SELECT:       Res = PromoteIntOp_SELECT(N, OpNo); break;
+   case ISD::SELECT_CC:    Res = PromoteIntOp_SELECT_CC(N, OpNo); break;
++  case ISD::XOR: {
++    SDValue LHS = N->getOperand(0);
++    SDValue RHS = N->getOperand(1);
++    SDLoc DL(N);
++    EVT VT = N->getValueType(0);
++    if (OpNo == 0)
++      LHS = GetPromotedInteger(LHS);
++    else
++      RHS = GetPromotedInteger(RHS);
++    LHS = DAG.getZExtOrTrunc(LHS, DL, VT);
++    RHS = DAG.getZExtOrTrunc(RHS, DL, VT);
++    Res = DAG.getNode(ISD::XOR, DL, VT, LHS, RHS);
++    break;
++  }
+   case ISD::VP_SETCC:
+   case ISD::SETCC:        Res = PromoteIntOp_SETCC(N, OpNo); break;
+   case ISD::SIGN_EXTEND:  Res = PromoteIntOp_SIGN_EXTEND(N); break;
+@@ -2193,3 +2207,5 @@ SDValue DAGTypeLegalizer::PromoteIntOp_ANY_EXTEND(SDNode *N) {
+ SDValue DAGTypeLegalizer::PromoteIntOp_ANY_EXTEND(SDNode *N) {
+   SDValue Op = GetPromotedInteger(N->getOperand(0));
++  if (Op.getValueType() == N->getValueType(0))
++    return Op;
+   return DAG.getNode(ISD::ANY_EXTEND, SDLoc(N), N->getValueType(0), Op);
+ }

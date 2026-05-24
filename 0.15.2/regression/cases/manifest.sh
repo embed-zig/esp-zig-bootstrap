@@ -32,6 +32,8 @@ CASE_IDS=(
 	xtensa-scalar-bool-not-return
 	xtensa-scalar-bool-call
 	xtensa-scalar-bool-call-inverted
+	xtensa-scalar-bool-bitwise
+	xtensa-selectiondag-combine-loop
 	xtensa-c-uint128
 	xtensa-c-int128-typedefs
 	xtensa-c-int128-overflow
@@ -75,6 +77,8 @@ case_exists() {
 	xtensa-scalar-bool-not-return | \
 	xtensa-scalar-bool-call | \
 	xtensa-scalar-bool-call-inverted | \
+	xtensa-scalar-bool-bitwise | \
+	xtensa-selectiondag-combine-loop | \
 	xtensa-c-uint128 | \
 	xtensa-c-int128-typedefs | \
 	xtensa-c-int128-overflow | \
@@ -106,6 +110,12 @@ case_source() {
 	fi
 
 	source_file="$MANIFEST_DIR/$case_id.cpp"
+	if [[ -f "$source_file" ]]; then
+		printf '%s\n' "$source_file"
+		return 0
+	fi
+
+	source_file="$MANIFEST_DIR/$case_id.ll"
 	if [[ -f "$source_file" ]]; then
 		printf '%s\n' "$source_file"
 		return 0
@@ -204,6 +214,12 @@ case_patches() {
 		;;
 	xtensa-scalar-bool-call-inverted)
 		printf '126'
+		;;
+	xtensa-scalar-bool-bitwise)
+		printf '126'
+		;;
+	xtensa-selectiondag-combine-loop)
+		printf '128'
 		;;
 	xtensa-c-uint128)
 		printf '127'
@@ -322,6 +338,12 @@ case_description() {
 		;;
 	xtensa-scalar-bool-call-inverted)
 		printf 'inverted scalar bool argument promotion for internal fastcc helpers'
+		;;
+	xtensa-scalar-bool-bitwise)
+		printf 'scalar bool AND/OR/XOR promotion through internal helpers'
+		;;
+	xtensa-selectiondag-combine-loop)
+		printf 'LLVM IR that reproduces an Xtensa ReleaseSafe SelectionDAG combine loop'
 		;;
 	xtensa-c-uint128)
 		printf 'C unsigned __int128 declarations and arithmetic for Xtensa'

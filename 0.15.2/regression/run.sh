@@ -3,6 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPILE_TIMEOUT_SECONDS="${XTENSA_REGRESSION_TIMEOUT_SECONDS:-120}"
 
 source "$SCRIPT_DIR/cases/manifest.sh"
 
@@ -17,6 +18,7 @@ Usage: ./0.15.2/regression/run.sh [case-id...]
 
 Environment:
   ZIG  path to the Zig executable to test
+  XTENSA_REGRESSION_TIMEOUT_SECONDS  per-compile timeout, defaults to 120
 
 Options:
   --help  show this help text
@@ -59,17 +61,44 @@ run_compile() {
 	local optimize="$3"
 	local work_dir="$4"
 	local log_file="$5"
+	local timeout_marker="$work_dir/timeout.marker"
 
 	mkdir -p "$work_dir"
+	rm -f "$timeout_marker"
 
 	(
 		cd "$work_dir"
-		"$zig_exe" build-obj \
+		exec "$zig_exe" build-obj \
 			-target xtensa-freestanding-none \
 			-mcpu esp32s3 \
 			"-O$optimize" \
 			"$source_file"
-	) >"$log_file" 2>&1
+	) >"$log_file" 2>&1 &
+	local compile_pid=$!
+
+	(
+		sleep "$COMPILE_TIMEOUT_SECONDS"
+		if kill -0 "$compile_pid" 2>/dev/null; then
+			printf 'compile timed out after %s seconds\n' "$COMPILE_TIMEOUT_SECONDS" >"$timeout_marker"
+			kill -TERM "$compile_pid" 2>/dev/null || true
+			sleep 2
+			kill -KILL "$compile_pid" 2>/dev/null || true
+		fi
+	) &
+	local watchdog_pid=$!
+
+	local compile_status=0
+	wait "$compile_pid" 2>/dev/null || compile_status=$?
+	kill "$watchdog_pid" 2>/dev/null || true
+	wait "$watchdog_pid" 2>/dev/null || true
+
+	if [[ -f "$timeout_marker" ]]; then
+		cat "$timeout_marker" >>"$log_file"
+		rm -f "$timeout_marker"
+		return 124
+	fi
+
+	return "$compile_status"
 }
 
 emit_asm() {
@@ -79,16 +108,43 @@ emit_asm() {
 	local work_dir="$4"
 	local asm_file="$5"
 	local log_file="$6"
+	local timeout_marker="$work_dir/timeout.marker"
 
+	rm -f "$timeout_marker"
 	(
 		cd "$work_dir"
-		"$zig_exe" build-obj \
+		exec "$zig_exe" build-obj \
 			-target xtensa-freestanding-none \
 			-mcpu esp32s3 \
 			"-O$optimize" \
 			-femit-asm="$asm_file" \
 			"$source_file"
-	) >>"$log_file" 2>&1
+	) >>"$log_file" 2>&1 &
+	local compile_pid=$!
+
+	(
+		sleep "$COMPILE_TIMEOUT_SECONDS"
+		if kill -0 "$compile_pid" 2>/dev/null; then
+			printf 'compile timed out after %s seconds\n' "$COMPILE_TIMEOUT_SECONDS" >"$timeout_marker"
+			kill -TERM "$compile_pid" 2>/dev/null || true
+			sleep 2
+			kill -KILL "$compile_pid" 2>/dev/null || true
+		fi
+	) &
+	local watchdog_pid=$!
+
+	local compile_status=0
+	wait "$compile_pid" 2>/dev/null || compile_status=$?
+	kill "$watchdog_pid" 2>/dev/null || true
+	wait "$watchdog_pid" 2>/dev/null || true
+
+	if [[ -f "$timeout_marker" ]]; then
+		cat "$timeout_marker" >>"$log_file"
+		rm -f "$timeout_marker"
+		return 124
+	fi
+
+	return "$compile_status"
 }
 
 verify_fixup_v4_high_group_asm() {
@@ -304,6 +360,13 @@ list_cases() {
 	done
 }
 
+case_optimizes() {
+	local case_id="$1"
+	_="$case_id"
+
+	printf 'Debug ReleaseSafe ReleaseFast ReleaseSmall'
+}
+
 main() {
 	local zig_exe
 	local failure_count=0
@@ -340,17 +403,19 @@ main() {
 		local optimize
 		local case_failed=0
 		local case_tmp
+		local optimizes
 
 		source_file="$(case_source "$case_id")"
 		patches="$(case_patches "$case_id")"
 		description="$(case_description "$case_id")"
+		optimizes="$(case_optimizes "$case_id")"
 		case_tmp="$(mktemp -d "${TMPDIR:-/tmp}/xtensa-regression.${case_id}.XXXXXX")"
 
 		printf '== %s ==\n' "$case_id"
 		printf '  patches: %s\n' "$patches"
 		printf '  detail:  %s\n' "$description"
 
-		for optimize in Debug ReleaseSafe ReleaseFast ReleaseSmall; do
+		for optimize in $optimizes; do
 			if ! run_one "$case_id" "$zig_exe" "$source_file" "$optimize" "$case_tmp/$optimize" "$case_tmp/$optimize.log"; then
 				case_failed=1
 			fi
