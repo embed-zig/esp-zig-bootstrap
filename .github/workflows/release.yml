@@ -64,6 +64,7 @@ jobs:
   build:
     needs: prepare
     runs-on: ubuntu-24.04
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -116,7 +117,6 @@ jobs:
 
       - name: Build Zig
         id: build
-        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -124,8 +124,6 @@ jobs:
 
       - name: Package artifact
         id: package
-        if: steps.build.outcome == 'success'
-        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -133,7 +131,6 @@ jobs:
             --build-number "${{ needs.prepare.outputs.build_number }}"
 
       - name: Upload packaged artifact
-        if: steps.build.outcome == 'success' && steps.package.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: zig-${{ needs.prepare.outputs.tag }}-${{ matrix.target }}-${{ matrix.mcpu }}
@@ -141,7 +138,7 @@ jobs:
           if-no-files-found: error
 
       - name: Report skipped target
-        if: steps.build.outcome != 'success' || steps.package.outcome == 'failure'
+        if: failure()
         shell: bash
         run: |
           printf '::warning::Skipping %s/%s because build or packaging failed\n' \
@@ -151,6 +148,7 @@ jobs:
     needs:
       - prepare
       - build
+    if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
