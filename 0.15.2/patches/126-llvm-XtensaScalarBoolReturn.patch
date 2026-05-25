@@ -26,19 +26,14 @@
 +  setOperationAction(ISD::XOR, MVT::i1, Custom);
 +  setTargetDAGCombine(ISD::ANY_EXTEND);
 +  setTargetDAGCombine(ISD::XOR);
-
+-
++
    setOperationAction(ISD::BR_CC, MVT::i32, Legal);
-@@ -1431,12 +1431,35 @@ void XtensaTargetLowering::ReplaceNodeResults(
-     if (!Wide)
-       return;
-     Results.push_back(Wide);
-     for (unsigned I = 1, E = N->getNumValues(); I != E; ++I)
-       Results.push_back(SDValue(N, I));
-     return;
-   }
-   }
+@@ -909,6 +909,29 @@
+   return SDValue();
  }
 -
+-static bool isSmallBoolVector(EVT VT);
 +
 +static SDValue foldScalarBoolXorOfSetCC(SDValue Val, SelectionDAG &DAG,
 +                                        const SDLoc &DL) {
@@ -63,8 +58,9 @@
 +  return DAG.getSetCC(DL, MVT::i1, CmpLHS, CmpRHS, CC);
 +}
 +
- SDValue XtensaTargetLowering::PerformDAGCombine(SDNode *N,
-                                                 DAGCombinerInfo &DCI) const {
++static bool isSmallBoolVector(EVT VT);
+ static SDValue getSmallBoolVectorValueMask(SDValue Vec, SelectionDAG &DAG);
+ static SDValue clampSmallBoolVectorMask(SDValue Mask, EVT VT, SDLoc DL,
 @@ -963,6 +987,14 @@
    case ISD::STORE:
      return PerformSTORECombine(N, DAG, DCI, Subtarget);
