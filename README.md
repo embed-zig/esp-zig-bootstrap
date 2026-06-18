@@ -22,7 +22,8 @@ Example:
 ./bootstrap.sh 0.16.0 aarch64-macos-none baseline
 ```
 
-Build output is written to the repository root: `.out/zig-<target>-<mcpu>/`
+Build output is written under the selected version directory:
+`<version>/.out/zig-<target>-<mcpu>/`
 
 During bootstrap, patches are applied from `<version>/patches/*.patch` in lexical
 order.
@@ -37,7 +38,6 @@ order.
 - `clean` only removes artifacts for the specified target:
   - `<version>/.build-<target>-<mcpu>/`
   - `<version>/.out/zig-<target>-<mcpu>/`
-  - `.out/zig-<target>-<mcpu>/`
 - It does not delete build results for other targets.
 
 ## smoke test

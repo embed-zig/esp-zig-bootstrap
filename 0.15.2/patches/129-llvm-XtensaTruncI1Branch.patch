@@ -1,0 +1,125 @@
+--- a/llvm/lib/CodeGen/SelectionDAG/LegalizeIntegerTypes.cpp
++++ b/llvm/lib/CodeGen/SelectionDAG/LegalizeIntegerTypes.cpp
+@@ -1726,6 +1726,12 @@ SDValue DAGTypeLegalizer::PromoteIntRes_TRUNCATE(SDNode *N) {
+   }
+   }
+ 
++  if (N->getOpcode() == ISD::TRUNCATE && N->getValueType(0) == MVT::i1 &&
++      NVT.isScalarInteger()) {
++    Res = DAG.getZExtOrTrunc(Res, dl, NVT);
++    return DAG.getNode(ISD::AND, dl, NVT, Res, DAG.getConstant(1, dl, NVT));
++  }
++
+   // Truncate to NVT instead of VT
+   if (N->getOpcode() == ISD::VP_TRUNCATE)
+     return DAG.getNode(ISD::VP_TRUNCATE, dl, NVT, Res, N->getOperand(1),
+--- a/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
++++ b/llvm/lib/Target/Xtensa/XtensaISelLowering.cpp
+@@ -229,6 +229,7 @@ XtensaTargetLowering::XtensaTargetLowering(const TargetMachine &TM,
+     setOperationAction(ISD::BR_CC, MVT::f32, Expand);
+ 
+   setOperationAction(ISD::SELECT, MVT::i32, Expand);
++  setTargetDAGCombine(ISD::SELECT);
+   setOperationAction(ISD::SELECT_CC, MVT::i32, Custom);
+   setOperationAction(ISD::SETCC, MVT::i32, Expand);
+   
+@@ -870,6 +871,39 @@ static SDValue PerformHWLoopCombine(SDNode *N, SelectionDAG &DAG,
+   return SDValue();
+ }
+ 
++static SDValue lowerScalarI1CondToI32(SDValue Cond, SelectionDAG &DAG,
++                                      const SDLoc &DL) {
++  SDValue Mask;
++  if (Cond.getValueType() == MVT::i1 && Cond.getOpcode() == ISD::TRUNCATE &&
++      Cond.getOperand(0).getValueType().isInteger())
++    Mask = DAG.getZExtOrTrunc(Cond.getOperand(0), DL, MVT::i32);
++  else
++    Mask = DAG.getZExtOrTrunc(Cond, DL, MVT::i32);
++
++  return DAG.getNode(ISD::AND, DL, MVT::i32, Mask,
++                     DAG.getConstant(1, DL, MVT::i32));
++}
++
++static SDValue combineExtendedScalarI1(SDValue Ext, SelectionDAG &DAG) {
++  SDValue Input = Ext.getOperand(0);
++  EVT VT = Ext.getValueType();
++  SDLoc DL(Ext);
++
++  if (Input.getValueType() != MVT::i1 || !VT.isInteger())
++    return SDValue();
++
++  if (Input.getOpcode() == ISD::TRUNCATE &&
++      Input.getOperand(0).getValueType().isInteger()) {
++    SDValue Mask = DAG.getZExtOrTrunc(Input.getOperand(0), DL, VT);
++    return DAG.getNode(ISD::AND, DL, VT, Mask, DAG.getConstant(1, DL, VT));
++  }
++
++  if (Ext.getOpcode() == ISD::ANY_EXTEND)
++    return DAG.getNode(ISD::ZERO_EXTEND, DL, VT, Input);
++
++  return SDValue();
++}
++
+ static SDValue PerformBRCONDCombine(SDNode *N, SelectionDAG &DAG,
+                                     TargetLowering::DAGCombinerInfo &DCI,
+                                     const XtensaSubtarget &Subtarget) {
+@@ -880,6 +914,13 @@ static SDValue PerformBRCONDCombine(SDNode *N, SelectionDAG &DAG,
+   SDValue Dest = N->getOperand(2);
+   ISD::CondCode CC = ISD::SETEQ;
+ 
++  if (Cond.getValueType() == MVT::i1 && Cond.getOpcode() != ISD::SETCC) {
++    SDValue Mask = lowerScalarI1CondToI32(Cond, DAG, DL);
++    return DAG.getNode(ISD::BR_CC, DL, MVT::isVoid, Chain,
++                       DAG.getCondCode(ISD::SETNE), Mask,
++                       DAG.getConstant(0, DL, MVT::i32), Dest);
++  }
++
+   if (Cond.getOpcode() != ISD::SETCC)
+     return SDValue();
+ 
+@@ -894,6 +935,23 @@ static SDValue PerformBRCONDCombine(SDNode *N, SelectionDAG &DAG,
+                      LHS, RHS, Dest);
+ }
+ 
++static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
++                                    TargetLowering::DAGCombinerInfo &DCI,
++                                    const XtensaSubtarget &Subtarget) {
++  SDLoc DL(N);
++  EVT VT = N->getValueType(0);
++  SDValue Cond = N->getOperand(0);
++
++  if (Cond.getValueType() != MVT::i1 || Cond.getOpcode() != ISD::TRUNCATE ||
++      !Cond.getOperand(0).getValueType().isInteger())
++    return SDValue();
++
++  SDValue Mask = lowerScalarI1CondToI32(Cond, DAG, DL);
++  return DAG.getNode(ISD::SELECT_CC, DL, VT, Mask,
++                     DAG.getConstant(0, DL, MVT::i32), N->getOperand(1),
++                     N->getOperand(2), DAG.getCondCode(ISD::SETNE));
++}
++
+ static SDValue PerformBUILD_VECTORCombine(SDNode *N, SelectionDAG &DAG,
+                                           TargetLowering::DAGCombinerInfo &DCI,
+                                           const XtensaSubtarget &Subtarget) {
+@@ -1478,6 +1536,8 @@ SDValue XtensaTargetLowering::PerformDAGCombine(SDNode *N,
+     return PerformHWLoopCombine(N, DAG, DCI, Subtarget);
+   case ISD::BRCOND:
+     return PerformBRCONDCombine(N, DAG, DCI, Subtarget);
++  case ISD::SELECT:
++    return PerformSELECTCombine(N, DAG, DCI, Subtarget);
+   case ISD::BUILD_VECTOR:
+     return PerformBUILD_VECTORCombine(N, DAG, DCI, Subtarget);
+   case ISD::BITCAST:
+@@ -1492,10 +1552,8 @@ SDValue XtensaTargetLowering::PerformDAGCombine(SDNode *N,
+     break;
+   case ISD::ZERO_EXTEND:
+   case ISD::ANY_EXTEND:
+-    if (Opc == ISD::ANY_EXTEND && N->getOperand(0).getValueType() == MVT::i1 &&
+-        N->getValueType(0).isInteger())
+-      return DAG.getNode(ISD::ZERO_EXTEND, SDLoc(N), N->getValueType(0),
+-                         N->getOperand(0));
++    if (SDValue Scalar = combineExtendedScalarI1(SDValue(N, 0), DAG))
++      return Scalar;
+     return combineExtendedSmallBoolVectorExtract(SDValue(N, 0), DAG);
+   }
+ 

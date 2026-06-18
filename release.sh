@@ -13,7 +13,7 @@ Examples:
   ./release.sh 0.16.0 aarch64-macos-none baseline --build-number r1 --publish
 
 Behavior:
-  1) Package .out/zig-<target>-<mcpu> into release/v<version-rN>/zig-v<version-rN>-<target>-<mcpu>.tar.xz
+  1) Package <version>/.out/zig-<target>-<mcpu> into release/v<version-rN>/zig-v<version-rN>-<target>-<mcpu>.tar.xz
   2) Generate/refresh release/v<version-rN>/SHA256SUMS
   3) (optional) Publish via gh release create v<version-rN>
 EOF
@@ -65,7 +65,7 @@ VERSION_LABEL="v${VERSION}-r${BUILD_NUMBER}"
 
 VERSION_DIR="$SCRIPT_DIR/$VERSION"
 OUT_NAME="zig-${TARGET}-${MCPU}"
-OUT_DIR="$SCRIPT_DIR/.out/$OUT_NAME"
+OUT_DIR="$VERSION_DIR/.out/$OUT_NAME"
 ARTIFACT_NAME="zig-${VERSION_LABEL}-${TARGET}-${MCPU}.tar.xz"
 RELEASE_DIR="$SCRIPT_DIR/release/$VERSION_LABEL"
 ARTIFACT_PATH="$RELEASE_DIR/$ARTIFACT_NAME"
@@ -77,7 +77,7 @@ CHECKSUM_PATH="$RELEASE_DIR/SHA256SUMS"
 mkdir -p "$RELEASE_DIR"
 
 printf 'Packaging %s -> %s\n' "$OUT_DIR" "$ARTIFACT_PATH"
-tar -C "$SCRIPT_DIR/.out" -cJf "$ARTIFACT_PATH" "$OUT_NAME"
+tar -C "$VERSION_DIR/.out" -cJf "$ARTIFACT_PATH" "$OUT_NAME"
 
 printf 'Generating checksum file: %s\n' "$CHECKSUM_PATH"
 (

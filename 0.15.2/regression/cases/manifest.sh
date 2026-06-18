@@ -33,6 +33,8 @@ CASE_IDS=(
 	xtensa-scalar-bool-call
 	xtensa-scalar-bool-call-inverted
 	xtensa-scalar-bool-bitwise
+	xtensa-optional-enum-return
+	xtensa-optional-enum-lookup
 	xtensa-selectiondag-combine-loop
 	xtensa-c-uint128
 	xtensa-c-int128-typedefs
@@ -78,6 +80,8 @@ case_exists() {
 	xtensa-scalar-bool-call | \
 	xtensa-scalar-bool-call-inverted | \
 	xtensa-scalar-bool-bitwise | \
+	xtensa-optional-enum-return | \
+	xtensa-optional-enum-lookup | \
 	xtensa-selectiondag-combine-loop | \
 	xtensa-c-uint128 | \
 	xtensa-c-int128-typedefs | \
@@ -218,6 +222,12 @@ case_patches() {
 	xtensa-scalar-bool-bitwise)
 		printf '126'
 		;;
+	xtensa-optional-enum-return)
+		printf '129'
+		;;
+	xtensa-optional-enum-lookup)
+		printf '129'
+		;;
 	xtensa-selectiondag-combine-loop)
 		printf '128'
 		;;
@@ -341,6 +351,12 @@ case_description() {
 		;;
 	xtensa-scalar-bool-bitwise)
 		printf 'scalar bool AND/OR/XOR promotion through internal helpers'
+		;;
+	xtensa-optional-enum-return)
+		printf 'ReleaseSmall optional enum helper return decoded through the wrong enum arm'
+		;;
+	xtensa-optional-enum-lookup)
+		printf 'ReleaseSafe optional enum lookup return decoded through the wrong enum arm'
 		;;
 	xtensa-selectiondag-combine-loop)
 		printf 'LLVM IR that reproduces an Xtensa ReleaseSafe SelectionDAG combine loop'

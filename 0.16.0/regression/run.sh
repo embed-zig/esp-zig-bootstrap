@@ -291,6 +291,157 @@ verify_phi_spill_asm() {
 	verify_phi_spill_function_asm "$asm_file" "spill_phi_ret_v4" 4
 }
 
+verify_optional_enum_return_asm() {
+	local asm_file="$1"
+
+	awk '
+		function split_inst(line, parts) {
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+			return split(line, parts, /[[:space:],]+/)
+		}
+
+		function trim_reg(reg) {
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", reg)
+			gsub(/,.*$/, "", reg)
+			return reg
+		}
+
+		/^[[:space:]]*l16ui[[:space:]]/ {
+			split_inst($0, parts)
+			load_reg = trim_reg(parts[2])
+			seen_load = 1
+			seen_range = 0
+			masked_load = 0
+		}
+		seen_load && /^[[:space:]]*movi(\.n)?[[:space:]][^,]+,[[:space:]]*256$/ {
+			seen_256_limit = 1
+		}
+		seen_load && /^[[:space:]]*bltu[[:space:]]/ && seen_256_limit {
+			seen_range = 1
+		}
+		seen_range && /^[[:space:]]*and[[:space:]]/ {
+			split_inst($0, parts)
+			dst = trim_reg(parts[2])
+			src0 = trim_reg(parts[3])
+			src1 = trim_reg(parts[4])
+			if (dst == load_reg && (src0 == load_reg || src1 == load_reg)) {
+				masked_load = 1
+			}
+		}
+		seen_range && /^[[:space:]]*b(eqz|nez)(\.n)?[[:space:]]/ {
+			split_inst($0, parts)
+			branch_reg = trim_reg(parts[2])
+			if (branch_reg == load_reg && !masked_load) {
+				print "optional enum decode branches on unmasked halfword load"
+				exit 1
+			}
+		}
+		END {
+			if (!seen_load) {
+				print "missing optional enum halfword load"
+				exit 1
+			}
+		}
+	' "$asm_file"
+}
+
+verify_optional_enum_lookup_asm() {
+	local asm_file="$1"
+
+	awk '
+		function clear_state() {
+			load_reg = ""
+			window = 0
+			delete zero_reg
+			delete one_reg
+		}
+
+		function split_inst(line, parts) {
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+			return split(line, parts, /[[:space:],]+/)
+		}
+
+		function trim_reg(reg) {
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", reg)
+			gsub(/,.*$/, "", reg)
+			return reg
+		}
+
+		function is_zero(reg) {
+			return reg == "0" || zero_reg[reg]
+		}
+
+		function is_one(reg) {
+			return reg == "1" || one_reg[reg]
+		}
+
+		/^[[:space:]]*l16ui[[:space:]]/ {
+			split_inst($0, parts)
+			load_reg = trim_reg(parts[2])
+			seen_load = 1
+			window = 24
+			next
+		}
+
+		window > 0 {
+			window -= 1
+			if ($0 ~ /^[[:space:]]*movi(\.n)?[[:space:]]/) {
+				split_inst($0, parts)
+				dst = trim_reg(parts[2])
+				imm = parts[3]
+				if (imm == "0")
+					zero_reg[dst] = 1
+				else if (imm == "1")
+					one_reg[dst] = 1
+				else {
+					delete zero_reg[dst]
+					delete one_reg[dst]
+				}
+			}
+			if ($0 ~ /^[[:space:]]*and[[:space:]]/) {
+				split_inst($0, parts)
+				dst = trim_reg(parts[2])
+				src0 = trim_reg(parts[3])
+				src1 = trim_reg(parts[4])
+				if (dst == load_reg && ((src0 == load_reg && is_one(src1)) ||
+				    (src1 == load_reg && is_one(src0))))
+					load_reg = ""
+			}
+			if ($0 ~ /^[[:space:]]*b(eqz|nez)(\.n)?[[:space:]]/) {
+				split_inst($0, parts)
+				branch_reg = trim_reg(parts[2])
+				if (branch_reg == load_reg) {
+					print "optional enum lookup branches on unmasked halfword tag"
+					exit 1
+				}
+			}
+			if ($0 ~ /^[[:space:]]*b(eq|ne)[[:space:]]/) {
+				split_inst($0, parts)
+				lhs = trim_reg(parts[2])
+				rhs = trim_reg(parts[3])
+				if ((lhs == load_reg && is_zero(rhs)) ||
+				    (rhs == load_reg && is_zero(lhs))) {
+					print "optional enum lookup branches on unmasked halfword tag"
+					exit 1
+				}
+			}
+			if ($0 ~ /^[[:space:]]*[a-z]/) {
+				split_inst($0, parts)
+				dst = trim_reg(parts[2])
+				if (dst == load_reg && $0 !~ /^[[:space:]]*srli[[:space:]]/)
+					clear_state()
+			}
+		}
+
+		END {
+			if (!seen_load) {
+				print "missing optional enum halfword load"
+				exit 1
+			}
+		}
+	' "$asm_file"
+}
+
 verify_case_output() {
 	local case_id="$1"
 	local zig_exe="$2"
@@ -305,21 +456,35 @@ verify_case_output() {
 		if ! emit_asm "$zig_exe" "$source_file" "$optimize" "$work_dir" "$asm_file" "$log_file"; then
 			return 1
 		fi
-		verify_phi_spill_asm "$asm_file" >>"$log_file" 2>&1
+		verify_phi_spill_asm "$asm_file" >>"$log_file" 2>&1 || return 1
 		;;
 	xtensa-bool-load-hi-subvector:Debug)
 		local asm_file="$work_dir/$case_id.$optimize.s"
 		if ! emit_asm "$zig_exe" "$source_file" "$optimize" "$work_dir" "$asm_file" "$log_file"; then
 			return 1
 		fi
-		verify_load_hi_subvector_asm "$asm_file" >>"$log_file" 2>&1
+		verify_load_hi_subvector_asm "$asm_file" >>"$log_file" 2>&1 || return 1
 		;;
 	xtensa-bool-fixup-v4-high-group:Debug)
 		local asm_file="$work_dir/$case_id.$optimize.s"
 		if ! emit_asm "$zig_exe" "$source_file" "$optimize" "$work_dir" "$asm_file" "$log_file"; then
 			return 1
 		fi
-		verify_fixup_v4_high_group_asm "$asm_file" >>"$log_file" 2>&1
+		verify_fixup_v4_high_group_asm "$asm_file" >>"$log_file" 2>&1 || return 1
+		;;
+	xtensa-optional-enum-return:ReleaseSmall)
+		local asm_file="$work_dir/$case_id.$optimize.s"
+		if ! emit_asm "$zig_exe" "$source_file" "$optimize" "$work_dir" "$asm_file" "$log_file"; then
+			return 1
+		fi
+		verify_optional_enum_return_asm "$asm_file" >>"$log_file" 2>&1 || return 1
+		;;
+	xtensa-optional-enum-lookup:ReleaseSafe)
+		local asm_file="$work_dir/$case_id.$optimize.s"
+		if ! emit_asm "$zig_exe" "$source_file" "$optimize" "$work_dir" "$asm_file" "$log_file"; then
+			return 1
+		fi
+		verify_optional_enum_lookup_asm "$asm_file" >>"$log_file" 2>&1 || return 1
 		;;
 	esac
 

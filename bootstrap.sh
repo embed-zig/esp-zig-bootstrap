@@ -108,11 +108,10 @@ if [[ "$1" == "clean" ]]; then
 
 	BUILD_DIR="$VERSION_PATH/.build-${CLEAN_TARGET}-${CLEAN_MCPU}"
 	VERSION_OUT_DIR="$VERSION_PATH/.out/zig-${CLEAN_TARGET}-${CLEAN_MCPU}"
-	ROOT_OUT_DIR="$SCRIPT_DIR/.out/zig-${CLEAN_TARGET}-${CLEAN_MCPU}"
 
 	printf 'Cleaning %s for target=%s mcpu=%s...\n' "$VERSION_DIR" "$CLEAN_TARGET" "$CLEAN_MCPU"
 
-	for dir in "$BUILD_DIR" "$VERSION_OUT_DIR" "$ROOT_OUT_DIR"; do
+	for dir in "$BUILD_DIR" "$VERSION_OUT_DIR"; do
 		if [[ -e "$dir" ]]; then
 			printf '  Removing %s...\n' "$dir"
 			rm -rf "$dir"
@@ -224,13 +223,13 @@ export PKG_CONFIG_LIBDIR=""
 
 popd >/dev/null
 
-printf '\n=== Copying output to .out/ ===\n'
-ROOT_OUT_DIR="$SCRIPT_DIR/.out"
-ROOT_OUT_PATH="$ROOT_OUT_DIR/zig-${TARGET}-${MCPU}"
-mkdir -p "$ROOT_OUT_DIR"
-rm -rf "$ROOT_OUT_PATH"
-cp -R "$BUILD_DIR/out/zig-${TARGET}-${MCPU}" "$ROOT_OUT_DIR/"
+printf '\n=== Copying output to %s/.out/ ===\n' "$VERSION_DIR"
+VERSION_OUT_DIR="$VERSION_PATH/.out"
+VERSION_OUT_PATH="$VERSION_OUT_DIR/zig-${TARGET}-${MCPU}"
+mkdir -p "$VERSION_OUT_DIR"
+rm -rf "$VERSION_OUT_PATH"
+cp -R "$BUILD_DIR/out/zig-${TARGET}-${MCPU}" "$VERSION_OUT_DIR/"
 
 printf '\n=== Build Complete ===\n'
-printf 'Output: %s\n' "$ROOT_OUT_PATH"
-ls -la "$ROOT_OUT_PATH"
+printf 'Output: %s\n' "$VERSION_OUT_PATH"
+ls -la "$VERSION_OUT_PATH"

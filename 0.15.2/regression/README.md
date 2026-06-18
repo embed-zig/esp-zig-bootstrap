@@ -35,6 +35,8 @@ Xtensa patches under `0.15.2/patches/`.
 - `cases/xtensa-scalar-bool-call.zig`: covers `126`, including scalar `bool` arguments to internal helpers
 - `cases/xtensa-scalar-bool-call-inverted.zig`: covers `126`, including inverted scalar `bool` arguments to internal helpers
 - `cases/xtensa-scalar-bool-bitwise.zig`: covers `126`, including scalar `bool` AND/OR/XOR values flowing through internal helpers
+- `cases/xtensa-optional-enum-return.zig`: covers `129`, including ReleaseSmall optional enum helper return misdecode
+- `cases/xtensa-optional-enum-lookup.zig`: covers `129`, including ReleaseSafe optional enum lookup return misdecode
 - `cases/xtensa-selectiondag-combine-loop.ll`: covers `128`, including LLVM IR that reproduces an Xtensa ReleaseSafe SelectionDAG combine loop
 - `cases/xtensa-c-uint128.c`: covers `127`, including C `unsigned __int128` declarations and arithmetic
 - `cases/xtensa-c-int128-typedefs.c`: covers `127`, including C `__int128_t` and `__uint128_t` predefined typedefs
@@ -90,6 +92,8 @@ List all available cases without running compilation:
 - `xtensa-bool-phi-spill` also performs a Debug-only assembly sanity check for the BR2/BR4 byte spill/reload path.
 - `xtensa-bool-fixup-v4-high-group` also performs a Debug-only assembly sanity check for the high-group BR4 writeback shape.
 - `xtensa-bool-load-hi-subvector` also performs a Debug-only assembly sanity check for the packed-byte high-half extract path.
+- `xtensa-optional-enum-return` also performs a ReleaseSmall assembly sanity check for the optional enum decode path.
+- `xtensa-optional-enum-lookup` also performs a ReleaseSafe assembly sanity check for the optional enum decode path.
 - The harness runs `zig build-obj -target xtensa-freestanding-none -mcpu esp32s3`.
 - The harness uses `ZIG` when provided, otherwise it falls back to
 `$(command -v zig)`.
