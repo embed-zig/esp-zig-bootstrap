@@ -151,7 +151,6 @@ jobs:
     needs: prepare
     runs-on:
       group: Default
-      labels: ubuntu-latest-16-cores
     continue-on-error: true
     steps:
       - uses: actions/checkout@v6
