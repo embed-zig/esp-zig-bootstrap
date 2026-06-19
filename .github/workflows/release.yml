@@ -74,7 +74,7 @@ jobs:
             runner: ubuntu-24.04
           - target: aarch64-linux-gnu
             mcpu: baseline
-            runner: ubuntu-24.04-16core
+            runner: ubuntu-latest-16-cores
           - target: x86_64-macos-none
             mcpu: baseline
             runner: ubuntu-24.04
