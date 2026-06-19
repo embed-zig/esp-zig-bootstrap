@@ -63,7 +63,7 @@ jobs:
 
   build:
     needs: prepare
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -71,16 +71,22 @@ jobs:
         include:
           - target: x86_64-linux-gnu
             mcpu: baseline
+            runner: ubuntu-24.04
           - target: aarch64-linux-gnu
             mcpu: baseline
+            runner: ubuntu-24.04-16core
           - target: x86_64-macos-none
             mcpu: baseline
+            runner: ubuntu-24.04
           - target: aarch64-macos-none
             mcpu: baseline
+            runner: ubuntu-24.04
           - target: x86_64-windows-gnu
             mcpu: baseline
+            runner: ubuntu-24.04
           - target: aarch64-windows-gnu
             mcpu: baseline
+            runner: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
