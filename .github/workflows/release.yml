@@ -72,9 +72,6 @@ jobs:
           - target: x86_64-linux-gnu
             mcpu: baseline
             runner: ubuntu-24.04
-          - target: aarch64-linux-gnu
-            mcpu: baseline
-            runner: ubuntu-latest-16-cores
           - target: x86_64-macos-none
             mcpu: baseline
             runner: ubuntu-24.04
@@ -150,10 +147,79 @@ jobs:
           printf '::warning::Skipping %s/%s because build or packaging failed\n' \
             "${{ matrix.target }}" "${{ matrix.mcpu }}"
 
+  build-aarch64-linux:
+    needs: prepare
+    runs-on:
+      group: Default
+      labels: ubuntu-latest-16-cores
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Cache downloaded sources
+        uses: actions/cache@v4
+        with:
+          path: ${{ needs.prepare.outputs.version }}/.downloads
+          key: downloads-${{ runner.os }}-${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.sources_hash }}
+          restore-keys: downloads-${{ runner.os }}-${{ needs.prepare.outputs.version }}-
+
+      - name: Install Mach-O compact unwind header
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          append_include_path() {
+            local name="$1"
+            local current="${!name:-}"
+            if [[ -n "$current" ]]; then
+              printf '%s=%s:%s\n' "$name" "$include_dir" "$current" >>"$GITHUB_ENV"
+            else
+              printf '%s=%s\n' "$name" "$include_dir" >>"$GITHUB_ENV"
+            fi
+          }
+
+          include_dir="$RUNNER_TEMP/mach-o-headers"
+          mkdir -p "$include_dir/mach-o"
+          curl -fsSL \
+            https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-21.1.3/libunwind/include/mach-o/compact_unwind_encoding.h \
+            -o "$include_dir/mach-o/compact_unwind_encoding.h"
+          append_include_path CPATH
+          append_include_path C_INCLUDE_PATH
+          append_include_path CPLUS_INCLUDE_PATH
+
+      - name: Build Zig
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./bootstrap.sh "${{ needs.prepare.outputs.version }}" aarch64-linux-gnu baseline
+
+      - name: Package artifact
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./release.sh "${{ needs.prepare.outputs.version }}" aarch64-linux-gnu baseline \
+            --build-number "${{ needs.prepare.outputs.build_number }}"
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zig-${{ needs.prepare.outputs.tag }}-aarch64-linux-gnu-baseline
+          path: release/${{ needs.prepare.outputs.tag }}/zig-${{ needs.prepare.outputs.tag }}-aarch64-linux-gnu-baseline.tar.xz
+          if-no-files-found: error
+
+      - name: Report skipped target
+        if: failure()
+        shell: bash
+        run: |
+          printf '::warning::Skipping aarch64-linux-gnu/baseline because build or packaging failed\n'
+
   release:
     needs:
       - prepare
       - build
+      - build-aarch64-linux
     if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-24.04
     steps:
