@@ -81,9 +81,6 @@ jobs:
           - target: x86_64-windows-gnu
             mcpu: baseline
             runner: ubuntu-24.04
-          - target: aarch64-windows-gnu
-            mcpu: baseline
-            runner: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
@@ -147,11 +144,19 @@ jobs:
           printf '::warning::Skipping %s/%s because build or packaging failed\n' \
             "${{ matrix.target }}" "${{ matrix.mcpu }}"
 
-  build-aarch64-linux:
+  build-large-targets:
     needs: prepare
     runs-on:
       group: Default
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-linux-gnu
+            mcpu: baseline
+          - target: aarch64-windows-gnu
+            mcpu: baseline
     steps:
       - uses: actions/checkout@v6
 
@@ -191,34 +196,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./bootstrap.sh "${{ needs.prepare.outputs.version }}" aarch64-linux-gnu baseline
+          ./bootstrap.sh "${{ needs.prepare.outputs.version }}" "${{ matrix.target }}" "${{ matrix.mcpu }}"
 
       - name: Package artifact
         id: package
         shell: bash
         run: |
           set -euo pipefail
-          ./release.sh "${{ needs.prepare.outputs.version }}" aarch64-linux-gnu baseline \
+          ./release.sh "${{ needs.prepare.outputs.version }}" "${{ matrix.target }}" "${{ matrix.mcpu }}" \
             --build-number "${{ needs.prepare.outputs.build_number }}"
 
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zig-${{ needs.prepare.outputs.tag }}-aarch64-linux-gnu-baseline
-          path: release/${{ needs.prepare.outputs.tag }}/zig-${{ needs.prepare.outputs.tag }}-aarch64-linux-gnu-baseline.tar.xz
+          name: zig-${{ needs.prepare.outputs.tag }}-${{ matrix.target }}-${{ matrix.mcpu }}
+          path: release/${{ needs.prepare.outputs.tag }}/zig-${{ needs.prepare.outputs.tag }}-${{ matrix.target }}-${{ matrix.mcpu }}.tar.xz
           if-no-files-found: error
 
       - name: Report skipped target
         if: failure()
         shell: bash
         run: |
-          printf '::warning::Skipping aarch64-linux-gnu/baseline because build or packaging failed\n'
+          printf '::warning::Skipping %s/%s because build or packaging failed\n' \
+            "${{ matrix.target }}" "${{ matrix.mcpu }}"
 
   release:
     needs:
       - prepare
       - build
-      - build-aarch64-linux
+      - build-large-targets
     if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-24.04
     steps:
